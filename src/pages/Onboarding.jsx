@@ -129,7 +129,7 @@ export default function Onboarding() {
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-slate-900">KawaMyCenter</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Kawa Note</h1>
           <p className="text-sm text-slate-600 mt-1">Bem-vindo ao onboarding</p>
         </div>
       </div>

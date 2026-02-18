@@ -72,17 +72,19 @@ export default function TabBar({ tabs, activeTab, onSelectTab, onCloseTab, onNav
                   <FileText className="w-3 h-3 shrink-0" />
                 )}
                 <span className="max-w-[120px] truncate">{tab.title}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(tab.id);
-                  }}
-                >
-                  <X className="w-3 h-3" />
-                </Button>
+                {tab.type === 'quickEditor' && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseTab(tab.id);
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                )}
               </div>
             </motion.div>
           ))}

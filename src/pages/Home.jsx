@@ -120,21 +120,64 @@ export default function Home() {
     setSelectedFolder(navList[nextIndex]);
   };
 
-  // Clear tabs when folder changes
+  // Populate tabs with filtered notes when folder changes or notes load
   useEffect(() => {
-    setOpenTabs([]);
-    setActiveTab(null);
-  }, [selectedFolder]);
+    // Recalculate filtered notes for tabs
+    const isGlobalSearch = searchScope === 'global' && searchTerm;
+    const tabNotes = notes.filter((note) => {
+      // Filtro de pasta (ignorado em pesquisa global com termo ativo)
+      if (!isGlobalSearch) {
+        if (selectedFolder && note.folderId !== selectedFolder.id) return false;
+        if (!selectedFolder && note.folderId) return false;
+      }
 
-  // Abrir nota em tab (single-click)
+      // Filtro de tipo
+      if (!filters[note.type]) return false;
+
+      // Filtro de fixada
+      if (filters.pinnedOnly && !note.pinned) return false;
+
+      // Busca textual
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        return (
+          note.title?.toLowerCase().includes(search) ||
+          note.content?.toLowerCase().includes(search) ||
+          note.tags?.some(tag => tag.toLowerCase().includes(search)) ||
+          note.context?.toLowerCase().includes(search)
+        );
+      }
+
+      return true;
+    });
+
+    if (tabNotes.length === 0) {
+      setOpenTabs([]);
+      setActiveTab(null);
+      return;
+    }
+
+    // Create tabs for all filtered notes
+    const noteTabs = tabNotes.map(note => ({
+      id: note.id,
+      title: note.title || 'Sem título',
+      type: 'note',
+      note
+    }));
+
+    setOpenTabs(noteTabs);
+    
+    // Set first note as active if no active tab or active tab is not in the new list
+    if (!activeTab || !noteTabs.find(t => t.id === activeTab.id)) {
+      setActiveTab(noteTabs[0]);
+    }
+  }, [selectedFolder, notes, filters, searchTerm, searchScope]);
+
+  // Abrir nota em tab (single-click) - just activate existing tab
   const openNoteInTab = (/** @type {Note} */ note) => {
     const existingTab = openTabs.find(t => t.id === note.id && t.type === 'note');
     if (existingTab) {
       setActiveTab(existingTab);
-    } else {
-      const newTab = { id: note.id, title: note.title || 'Sem título', type: 'note', note };
-      setOpenTabs(prev => [...prev, newTab]);
-      setActiveTab(newTab);
     }
   };
 
@@ -149,8 +192,15 @@ export default function Home() {
     setActiveTab(quickEditorTab);
   };
 
-  // Fechar aba
+  // Fechar aba (apenas QuickEditor tabs podem ser fechadas)
   const closeTab = (/** @type {string} */ tabId) => {
+    const tabToClose = openTabs.find(t => t.id === tabId);
+    
+    // Não permitir fechar tabs de notas (apenas QuickEditor)
+    if (tabToClose?.type === 'note') {
+      return;
+    }
+
     setOpenTabs(prev => {
       const currentIndex = prev.findIndex(t => t.id === tabId);
       const newTabs = prev.filter(t => t.id !== tabId);
@@ -265,6 +315,11 @@ export default function Home() {
     return true;
   });
 
+  // Folder-scoped note count (unfiltered by type/pin/search)
+  const folderNoteCount = selectedFolder
+    ? notes.filter(n => n.folderId === selectedFolder.id).length
+    : notes.length;
+
   // Separar notas fixadas
   const pinnedNotes = filteredNotes.filter(n => n.pinned);
   const regularNotes = filteredNotes.filter(n => !n.pinned);
@@ -282,104 +337,103 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Editor or List View */}
-        {activeTab ? (
-          activeTab.type === 'quickEditor' ? (
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="max-w-3xl mx-auto">
-                <QuickEditor 
-                  onNoteSaved={handleNoteSaved} 
-                  folderId={selectedFolder?.id || null}
-                />
-              </div>
-            </div>
-          ) : (
-            <NoteEditor
-              note={activeTab.note}
-              onSave={refetch}
-              onClose={() => closeTab(activeTab.id)}
-              allNotes={notes}
-            />
-          )
-        ) : (
-          <>
-            {/* Header */}
-            <div className="border-b border-slate-200 bg-white">
-              <div className="px-6 py-6">
-                {/* Migration Status Banner */}
-                {migrationStatus === 'running' && (
-                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
-                    <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-blue-900">
-                        Encriptando suas notas...
-                      </p>
-                      <p className="text-xs text-blue-700">
-                        {migrationProgress.current} de {migrationProgress.total} notas processadas
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    {navList.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={navigatePrev}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                    )}
-                    <div>
-                      <h1 className="text-2xl font-bold text-slate-900">
-                        {isGlobalSearch ? 'Pesquisa em Todas as Notas' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
-                      </h1>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {filteredNotes.length} {filteredNotes.length === 1 ? 'nota' : 'notas'}
-                      </p>
-                    </div>
-                    {navList.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={navigateNext}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Sparkles className="w-4 h-4" />
-                    <span>{notes.length} total</span>
-                  </div>
+        {/* Header - Always visible */}
+        <div className="border-b border-slate-200 bg-white">
+          <div className="px-6 py-6">
+            {/* Migration Status Banner */}
+            {migrationStatus === 'running' && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900">
+                    Encriptando suas notas...
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    {migrationProgress.current} de {migrationProgress.total} notas processadas
+                  </p>
                 </div>
-                
-                <SearchBar
-                  onSearch={setSearchTerm}
-                  onFilterChange={setFilters}
-                  onSearchScopeChange={setSearchScope}
-                  searchScope={searchScope}
-                />
+              </div>
+            )}
+            
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                {navList.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={navigatePrev}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900">
+                    {isGlobalSearch ? 'Pesquisa em Todas as Notas' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
+                  </h1>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {folderNoteCount} {folderNoteCount === 1 ? 'nota' : 'notas'}
+                  </p>
+                </div>
+                {navList.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={navigateNext}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Sparkles className="w-4 h-4" />
+                <span>{notes.length} total</span>
               </div>
             </div>
-
-            {/* Tab Bar - After Header */}
-            <TabBar
-              tabs={openTabs}
-              activeTab={activeTab}
-              onSelectTab={setActiveTab}
-              onCloseTab={closeTab}
-              onNavigatePrev={navigateTabPrev}
-              onNavigateNext={navigateTabNext}
-              onNewTab={openNewTab}
+            
+            <SearchBar
+              onSearch={setSearchTerm}
+              onFilterChange={setFilters}
+              onSearchScopeChange={setSearchScope}
+              searchScope={searchScope}
             />
+          </div>
+        </div>
 
-            {/* Notes Grid */}
+        {/* Tab Bar - Always visible */}
+        <TabBar
+          tabs={openTabs}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onCloseTab={closeTab}
+          onNavigatePrev={navigateTabPrev}
+          onNavigateNext={navigateTabNext}
+          onNewTab={openNewTab}
+        />
+
+        {/* Content Region - Changes based on activeTab */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {activeTab ? (
+            activeTab.type === 'quickEditor' ? (
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-3xl mx-auto">
+                  <QuickEditor 
+                    onNoteSaved={handleNoteSaved} 
+                    folderId={selectedFolder?.id || null}
+                  />
+                </div>
+              </div>
+            ) : (
+              <NoteEditor
+                note={activeTab.note}
+                onSave={refetch}
+                onClose={() => closeTab(activeTab.id)}
+                allNotes={notes}
+              />
+            )
+          ) : (
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-6">
                 <QuickEditor onNoteSaved={refetch} folderId={selectedFolder?.id || null} />
@@ -467,8 +521,8 @@ export default function Home() {
         )}
       </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Dialog para mover notas entre pastas */}

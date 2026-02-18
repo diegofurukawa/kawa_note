@@ -275,7 +275,7 @@ export default function Sidebar({
               <Brain className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-900">MyCenter</h1>
+              <h1 className="font-bold text-slate-900">Kawa Note</h1>
             </div>
           </div>
         )}
