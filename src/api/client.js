@@ -5,6 +5,9 @@ import { appParams, setAppToken } from '@/lib/app-params';
 // Use relative paths - Nginx proxy handles routing to backend
 const API_BASE_URL = '/api';
 
+// Flag to prevent infinite refresh token loops
+let _isRefreshing = false;
+
 /**
  * API Client for KawaMyCenter Backend
  * Handles HTTP requests with authentication and error handling
@@ -47,7 +50,8 @@ export const apiClient = {
 
       if (!response.ok) {
         // Handle 401 with token refresh
-        if (response.status === 401 && endpoint !== '/auth/login' && endpoint !== '/auth/refresh') {
+        if (response.status === 401 && !endpoint.startsWith('/auth/') && !_isRefreshing) {
+          _isRefreshing = true;
           const refreshToken = localStorage.getItem('kawa_refresh_token');
           if (refreshToken) {
             try {
@@ -57,11 +61,13 @@ export const apiClient = {
                 if (refreshResponse.data.refreshToken) {
                   localStorage.setItem('kawa_refresh_token', refreshResponse.data.refreshToken);
                 }
+                _isRefreshing = false;
                 // Retry original request with new token
                 return this.request(endpoint, options);
               }
             } catch {
               // Refresh failed, clear tokens and redirect to login
+              _isRefreshing = false;
               setAppToken(null);
               localStorage.removeItem('kawa_refresh_token');
               window.location.href = `/login?from_url=${encodeURIComponent(window.location.href)}`;
@@ -69,6 +75,7 @@ export const apiClient = {
             }
           } else {
             // No refresh token, redirect to login
+            _isRefreshing = false;
             setAppToken(null);
             window.location.href = `/login?from_url=${encodeURIComponent(window.location.href)}`;
           }

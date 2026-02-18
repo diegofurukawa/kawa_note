@@ -3,7 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Save, X, Pin, Loader2, ExternalLink } from "lucide-react";
+import { Save, X, Pin, Loader2, ExternalLink, FolderInput, Edit3, Eye } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { safeUrlTransform } from '@/lib/constants';
 import { format } from "date-fns";
 import { toast } from 'sonner';
 import { useUpdateNote } from '@/api/useNotes';
@@ -18,10 +21,11 @@ const typeColors = {
   word: "bg-amber-100 text-amber-700"
 };
 
-export default function NoteEditor({ note, onSave, onClose, allNotes = [] }) {
+export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMoveNote }) {
   const [editedNote, setEditedNote] = useState(note);
   const [hasChanges, setHasChanges] = useState(false);
   const [error, setError] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const updateNoteMutation = useUpdateNote();
   const hasChangesRef = useRef(false);
 
@@ -30,6 +34,7 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [] }) {
     setHasChanges(false);
     hasChangesRef.current = false;
     setError(null);
+    setIsEditMode(false);
   }, [note]);
 
   // Extract all unique tags from all notes for autocomplete
@@ -81,6 +86,7 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [] }) {
       setHasChanges(false);
       hasChangesRef.current = false;
       toast.success('Nota salva com sucesso');
+      setIsEditMode(false);
       if (onSave) onSave();
     } catch (err) {
       // Check if it's an encryption error and handle logout
@@ -179,6 +185,26 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [] }) {
             <Pin className={`w-4 h-4 ${editedNote.pinned ? 'fill-amber-500' : ''}`} />
           </Button>
           
+          {onMoveNote && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onMoveNote(editedNote)}
+              title="Mover para outra pasta"
+            >
+              <FolderInput className="w-4 h-4" />
+            </Button>
+          )}
+          
+          <Button
+            variant={isEditMode ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setIsEditMode(!isEditMode)}
+          >
+            {isEditMode ? <Eye className="w-4 h-4 mr-1" /> : <Edit3 className="w-4 h-4 mr-1" />}
+            {isEditMode ? 'Visualizar' : 'Editar'}
+          </Button>
+          
           {hasChanges && (
             <Button
               onClick={handleSave}
@@ -252,12 +278,26 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [] }) {
             </div>
           )}
 
-          <Textarea
-            value={editedNote.content}
-            onChange={(e) => handleChange('content', e.target.value)}
-            className="min-h-[400px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0"
-            placeholder="Comece a escrever..."
-          />
+          {isEditMode ? (
+            <Textarea
+              value={editedNote.content}
+              onChange={(e) => handleChange('content', e.target.value)}
+              className="min-h-[400px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0"
+              placeholder="Comece a escrever em Markdown..."
+              autoFocus
+            />
+          ) : (
+            <div
+              className="min-h-[400px] prose prose-sm max-w-none cursor-text"
+              onDoubleClick={() => setIsEditMode(true)}
+              title="Clique duplo para editar"
+            >
+              {editedNote.content
+                ? <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={safeUrlTransform}>{editedNote.content}</ReactMarkdown>
+                : <p className="text-slate-400">Comece a escrever...</p>
+              }
+            </div>
+          )}
 
           {/* URL Preview Card */}
           {previewData && editedNote.url && (

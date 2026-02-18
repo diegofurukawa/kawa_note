@@ -2,7 +2,7 @@ import { prisma } from '../../config/database.js';
 
 export const notesService = {
   async listNotes(userId, tenantId, filters) {
-    const { page, limit, folderId, search, tags, pinned } = filters;
+    const { page, limit, folderId, tags, pinned } = filters;
     const skip = (page - 1) * limit;
 
     const where = {
@@ -10,12 +10,6 @@ export const notesService = {
       tenantId,
       ...(folderId && { folderId }),
       ...(pinned !== undefined && { pinned }),
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { content: { contains: search, mode: 'insensitive' } }
-        ]
-      }),
       ...(tags && {
         tags: {
           hasSome: tags.split(',')
@@ -181,15 +175,14 @@ export const notesService = {
   },
 
   async searchNotes(userId, tenantId, query) {
+    // Text search on encrypted fields is not supported in E2E architecture
+    // Search is performed client-side after decryption
+    // This endpoint now only searches by tags
     const notes = await prisma.note.findMany({
       where: {
         userId,
         tenantId,
-        OR: [
-          { title: { contains: query, mode: 'insensitive' } },
-          { content: { contains: query, mode: 'insensitive' } },
-          { tags: { hasSome: [query] } }
-        ]
+        tags: { hasSome: [query] }
       },
       orderBy: { updatedAt: 'desc' },
       take: 50,

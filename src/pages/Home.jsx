@@ -14,6 +14,7 @@ import { useFolders } from '@/api/useFolders';
 import { Button } from "@/components/ui/button";
 import { needsMigration, migrateAllNotes, getMigrationStatusMessage } from '@/lib/noteMigration';
 import { isKeyAvailable } from '@/lib/keyManager';
+import { NO_FOLDER_SENTINEL } from '@/lib/constants';
 import { useSidebarState } from '@/hooks/useSidebarState';
 import { toast } from 'sonner';
 
@@ -36,7 +37,7 @@ export default function Home() {
   const [selectedFolder, setSelectedFolder] = useState(/** @type {Folder | null} */ (null));
   const [openTabs, setOpenTabs] = useState([]);
   const [activeTab, setActiveTab] = useState(null);
-  const [searchScope, setSearchScope] = useState(/** @type {'folder' | 'global'} */ ('folder'));
+  const [searchScope, setSearchScope] = useState(/** @type {'folder' | 'global'} */ ('global'));
   const [noteToMove, setNoteToMove] = useState(/** @type {Note | null} */ (null));
   const [migrationStatus, setMigrationStatus] = useState(/** @type {'idle' | 'running' | 'completed' | 'error'} */ ('idle'));
   const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
@@ -104,10 +105,10 @@ export default function Home() {
   const folders = foldersResponse?.data || [];
   const rootFolders = folders.filter((/** @type {Folder} */ f) => !f.parentFolderId);
 
-  // Lista navegável: [null (Todas), ...pastas ordenadas]
-  const navList = [null, ...rootFolders.sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))];
+  // Lista navegável: [null (Todas), NO_FOLDER_SENTINEL (Sem Pasta), ...pastas ordenadas]
+  const navList = [null, NO_FOLDER_SENTINEL, ...rootFolders.sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))];
   const currentNavIndex = navList.findIndex(item =>
-    item === null ? selectedFolder === null : item?.id === selectedFolder?.id
+    item === null ? selectedFolder === null : (item?.virtual ? selectedFolder?.virtual : item?.id === selectedFolder?.id)
   );
 
   const navigatePrev = () => {
@@ -127,8 +128,17 @@ export default function Home() {
     const tabNotes = notes.filter((note) => {
       // Filtro de pasta (ignorado em pesquisa global com termo ativo)
       if (!isGlobalSearch) {
-        if (selectedFolder && note.folderId !== selectedFolder.id) return false;
-        if (!selectedFolder && note.folderId) return false;
+        if (selectedFolder) {
+          if (selectedFolder.virtual) {
+            // "Sem Pasta" mode: only notes without a folderId
+            if (note.folderId) return false;
+          } else {
+            // Normal folder: only notes in this specific folder
+            if (note.folderId !== selectedFolder.id) return false;
+          }
+        } else {
+          // "Todas as Notas": no folder filtering
+        }
       }
 
       // Filtro de tipo
@@ -291,8 +301,17 @@ export default function Home() {
   const filteredNotes = notes.filter((/** @type {Note} */ note) => {
     // Filtro de pasta (ignorado em pesquisa global com termo ativo)
     if (!isGlobalSearch) {
-      if (selectedFolder && note.folderId !== selectedFolder.id) return false;
-      if (!selectedFolder && note.folderId) return false;
+      if (selectedFolder) {
+        if (selectedFolder.virtual) {
+          // "Sem Pasta" mode: only notes without a folderId
+          if (note.folderId) return false;
+        } else {
+          // Normal folder: only notes in this specific folder
+          if (note.folderId !== selectedFolder.id) return false;
+        }
+      } else {
+        // "Todas as Notas": no folder filtering
+      }
     }
 
     // Filtro de tipo
@@ -317,7 +336,9 @@ export default function Home() {
 
   // Folder-scoped note count (unfiltered by type/pin/search)
   const folderNoteCount = selectedFolder
-    ? notes.filter(n => n.folderId === selectedFolder.id).length
+    ? selectedFolder.virtual
+      ? notes.filter(n => !n.folderId).length
+      : notes.filter(n => n.folderId === selectedFolder.id).length
     : notes.length;
 
   // Separar notas fixadas
@@ -431,6 +452,7 @@ export default function Home() {
                 onSave={refetch}
                 onClose={() => closeTab(activeTab.id)}
                 allNotes={notes}
+                onMoveNote={setNoteToMove}
               />
             )
           ) : (

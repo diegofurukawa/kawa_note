@@ -19,7 +19,8 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeftOpen,
-  LogOut
+  LogOut,
+  FileX
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
+import { NO_FOLDER_SENTINEL } from "@/lib/constants";
 import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
 import { useNotes } from '@/api/useNotes';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
@@ -315,6 +317,41 @@ export default function Sidebar({
               <span className="flex-1">Todas as Notas</span>
               <span className="text-xs text-slate-400">{notesCount || 0}</span>
             </div>
+          )}
+
+          {!isCollapsed && (
+            <div
+              onClick={() => onSelectFolder(NO_FOLDER_SENTINEL)}
+              className={cn(
+                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition-colors",
+                selectedFolder?.virtual ? "bg-amber-100 text-amber-900" : "text-slate-600 hover:bg-slate-100"
+              )}
+            >
+              <FileX className="w-4 h-4" />
+              <span className="flex-1">Sem Pasta</span>
+              <span className="text-xs text-slate-400">{notes.filter(n => !n.folderId).length}</span>
+            </div>
+          )}
+
+          {isCollapsed && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    onClick={() => onSelectFolder(NO_FOLDER_SENTINEL)}
+                    className={cn(
+                      "flex items-center justify-center p-2 rounded-lg cursor-pointer transition-colors",
+                      selectedFolder?.virtual ? "bg-amber-100 text-amber-900" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <FileX className="w-5 h-5" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Sem Pasta ({notes.filter(n => !n.folderId).length})</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
 
           {!isCollapsed && (

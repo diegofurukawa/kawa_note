@@ -38,11 +38,14 @@ export default function QuickEditor({ onNoteSaved, folderId = null }) {
     return firstLine.substring(0, 100) || 'Nova nota';
   };
 
-  const fetchContext = async (noteContent, noteType) => {
+  const extractMetadata = (noteContent, noteType) => {
+    if (noteType !== 'url' && noteType !== 'image') return '';
+
     try {
-      // Context fetching not yet implemented
-      return '';
-    } catch (error) {
+      const url = new URL(noteContent.trim());
+      const today = new Date().toLocaleDateString('pt-BR');
+      return `Fonte: ${url.hostname} · Capturado em ${today}`;
+    } catch {
       return '';
     }
   };
@@ -55,8 +58,8 @@ export default function QuickEditor({ onNoteSaved, folderId = null }) {
       const detectedType = detectType(content);
       const title = extractTitle(content, detectedType);
       
-      // Buscar contexto da internet
-      const context = await fetchContext(content.trim(), detectedType);
+      // Extrair contexto da URL
+      const context = extractMetadata(content.trim(), detectedType);
       
       const noteData = {
         title,

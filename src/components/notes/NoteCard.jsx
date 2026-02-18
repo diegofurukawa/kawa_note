@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { safeUrlTransform } from '@/lib/constants';
 import {
   MoreVertical,
   Link as LinkIcon,
@@ -130,9 +133,16 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
               </div>
             )}
             
-            <p className="text-sm text-slate-600 line-clamp-3 whitespace-pre-wrap">
-              {note.content}
-            </p>
+            {useMemo(() => (
+              <div className="text-sm text-slate-600 line-clamp-3 prose prose-sm max-w-none">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  urlTransform={safeUrlTransform}
+                >
+                  {note.content}
+                </ReactMarkdown>
+              </div>
+            ), [note.content])}
             
             {note.context && (
               <div className="mt-3 p-2 bg-indigo-50 border border-indigo-100 rounded-lg">
