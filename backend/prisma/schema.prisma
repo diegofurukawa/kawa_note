@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  tenantId    String @id @default(dbgenerated("gen_random_uuid()")) @map("tenant_id") @db.VarChar(64)
+
+  tenantType  String @map("tenant_type") @db.VarChar(10) // FISICA | JURIDICA
+
+  // PF
+  fullName    String @map("full_name") @db.VarChar(255)
+
+  // PJ
+  tradeName   String? @map("trade_name") @db.VarChar(255)
+
+  document    String @db.VarChar(20)
+  fiscalNumber String? @map("fiscal_number") @db.VarChar(20)
+
+  // Endereco
+  street      String @db.VarChar(255)
+  number      String @db.VarChar(20)
+  complement  String? @db.VarChar(100)
+  district    String @db.VarChar(100)
+  city        String @db.VarChar(100)
+  state       String @db.VarChar(2)
+  zipCode     String @map("zip_code") @db.VarChar(10)
+  country     String @default("Brasil") @db.VarChar(100)
+  countryIso  String @default("BRA") @map("country_iso") @db.VarChar(3)
+
+  // Contato
+  phone       String?
+  mobilePhone String? @map("mobile_phone")
+  email       String?
+  website     String?
+
+  // Responsavel (PJ)
+  responsibleName     String? @map("responsible_name")
+  responsiblePosition String? @map("responsible_position")
+
+  // Onboarding
+  onboardingStatus String @default("IN_PROGRESS") @map("onboarding_status")
+  onboardingStep   String? @map("onboarding_step") @db.VarChar(50)
+
+  // Status
+  isActive    Boolean @default(false) @map("is_active")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  plans       TenantPlan[]
+  users       User[]
+  folders     Folder[]
+  notes       Note[]
+  relations   Relation[]
+
+  @@unique([document])
+  @@index([tenantType])
+  @@index([onboardingStatus])
+  @@index([phone])
+  @@index([mobilePhone])
+  @@index([email])
+  @@index([fiscalNumber])
+  @@map("tenants")
+}
+
+model TenantPlan {
+  id           Int      @id @default(autoincrement())
+  tenantId     String   @map("tenant_id") @db.VarChar(64)
+  tenant       Tenant   @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  planName     String   @map("plan_name") @db.VarChar(50)
+
+  maxCompanies Int      @default(1) @map("max_companies")
+  maxUsers     Int      @default(10) @map("max_users")
+  maxCustomers Int      @default(100) @map("max_customers")
+  maxStorageGb Int      @default(50) @map("max_storage_gb")
+
+  priceMonthly Decimal  @default(0) @map("price_monthly")
+
+  features     Json     @default("{}")
+
+  active       Boolean  @default(true)
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, active])
+  @@map("tenant_plans")
+}
+
+model User {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  email          String   @unique
+  password       String
+  name           String?
+  tenantId       String?  @map("tenant_id") @db.VarChar(64)
+  encryptionSalt String?  @map("encryption_salt")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [tenantId], onDelete: SetNull)
+  notes   Note[]
+  folders Folder[]
+
+  @@map("users")
+}
+
+model Folder {
+  id             String  @id @default(dbgenerated("gen_random_uuid()"))
+  name           String
+  parentFolderId String? @map("parent_folder_id")
+  color          String  @default("slate")
+  icon           String  @default("folder")
+  order          Int     @default(0)
+  userId         String  @map("user_id")
+  tenantId       String  @map("tenant_id") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant       Tenant   @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  parentFolder Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
+  subFolders   Folder[] @relation("FolderHierarchy")
+  notes        Note[]
+
+  @@index([tenantId])
+  @@map("folders")
+}
+
+model Note {
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  title       String   @db.Text
+  content     String   @db.Text
+  type        String   @default("text") // text, url, image, word
+  url         String?
+  previewData String?  @map("preview_data") @db.Text
+  tags        String   @default("") @db.Text
+  context     String?  @db.Text
+  isEncrypted Boolean  @default(true) @map("is_encrypted")
+  pinned      Boolean  @default(false)
+  folderId    String?  @map("folder_id")
+  userId      String   @map("user_id")
+  tenantId    String   @map("tenant_id") @db.VarChar(64)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant      Tenant     @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  folder      Folder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  relationsFrom Relation[] @relation("NoteFrom")
+  relationsTo   Relation[] @relation("NoteTo")
+
+  @@index([tenantId])
+  @@map("notes")
+}
+
+model Relation {
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
+  noteFromId   String   @map("note_from_id")
+  noteToId     String   @map("note_to_id")
+  relationType String   @default("semantic") @map("relation_type") // semantic, manual, reference, temporal
+  strength     Float    @default(0.5)
+  context      String?
+  tenantId     String   @map("tenant_id") @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  noteFrom Note @relation("NoteFrom", fields: [noteFromId], references: [id], onDelete: Cascade)
+  noteTo   Note @relation("NoteTo", fields: [noteToId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@unique([noteFromId, noteToId])
+  @@index([tenantId])
+  @@map("relations")
+}
+
+model App {
+  id              String   @id @default(dbgenerated("gen_random_uuid()"))
+  name            String
+  publicSettings  Json     @map("public_settings")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("apps")
+}

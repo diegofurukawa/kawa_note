@@ -1,0 +1,108 @@
+# =============================================================================
+# KawaMyCenter Full Stack - Production Stack for Portainer
+# Docker Standalone + Portainer Deploy Configuration
+# Includes: Backend API + Frontend SPA
+# Database: EXTERNAL PostgreSQL (not containerized)
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # MIGRATION SERVICE
+  # Responsibility: Execute database migrations before app startup
+  # Container is ephemeral - runs once and exits on completion
+  # Database: External PostgreSQL (configured via DATABASE_URL)
+  # ---------------------------------------------------------------------------
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migrate
+    container_name: kawa_note-migrate
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+    networks:
+      kawatech-network:
+        ipv4_address: ${IP_KAWA_MIGRATE}
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # BACKEND API SERVICE
+  # Responsibility: Serve the backend API
+  # Waits for migration to complete successfully before starting
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: kawa_note-api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PORT: ${BACKEND_PORT}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      kawatech-network:
+        ipv4_address: ${IP_KAWA_API}
+        aliases:
+          - kawa-note-api
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${BACKEND_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # FRONTEND APP SERVICE
+  # Responsibility: Serve the React SPA via nginx
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: kawa_note-app
+    restart: unless-stopped
+    networks:
+      kawatech-network:
+        ipv4_address: ${IP_KAWA_APP}
+    ports:
+      - "${FRONTEND_PORT}:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_APP_NAME=${VITE_APP_NAME:-KawaMyCenter}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+# -----------------------------------------------------------------------------
+# NETWORK CONFIGURATION
+# External network - must be created beforehand
+# Network name and IPs are parametrized via .env
+# -----------------------------------------------------------------------------
+networks:
+  kawatech-network:
+    external: true
+    name: ${DOCKER_NETWORK_NAME}

@@ -1,0 +1,65 @@
+# =============================================================================
+# Docker Ignore - Optimize Build Context
+# =============================================================================
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Testing
+coverage
+.nyc_output
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Documentation
+*.md
+!README.md
+
+# Docker files (not needed in build context)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Agent files
+.Agent
+
+# Misc
+*.pem
+*.cert
+*.key
