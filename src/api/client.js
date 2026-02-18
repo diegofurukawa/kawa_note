@@ -9,7 +9,7 @@ const API_BASE_URL = '/api';
 let _isRefreshing = false;
 
 /**
- * API Client for KawaMyCenter Backend
+ * API Client for Kawa Note Backend
  * Handles HTTP requests with authentication and error handling
  * 
  * SECURITY NOTE: Refresh tokens are stored in localStorage.

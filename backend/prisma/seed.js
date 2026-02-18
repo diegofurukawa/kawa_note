@@ -48,8 +48,8 @@ async function main() {
       data: {
         tenantId: 'demo-tenant-001',
         tenantType: 'JURIDICA',
-        fullName: 'KawaMyCenter Demo LTDA',
-        tradeName: 'KawaMyCenter Demo',
+        fullName: 'Kawa Note Demo LTDA',
+        tradeName: 'Kawa Note Demo',
         document: '12345678901234',
         fiscalNumber: '12.345.678/0001-90',
         street: 'Avenida Paulista',
@@ -203,7 +203,7 @@ async function main() {
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000011',
-      title: 'Bem-vindo ao KawaMyCenter',
+      title: 'Bem-vindo ao Kawa Note',
       content: 'Este é o seu centro de conhecimento pessoal. Comece criando notas, organizando-as em pastas e construindo conexões entre ideias.',
       type: 'text',
       tags: ['bem-vindo', 'início'],

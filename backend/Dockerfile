@@ -1,5 +1,5 @@
 # =============================================================================
-# KawaMyCenter Backend - Production Dockerfile
+# Kawa Note Backend - Production Dockerfile
 # Multi-stage build for Node.js/Fastify + Prisma + PostgreSQL
 # =============================================================================
 

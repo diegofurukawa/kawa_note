@@ -1,7 +1,7 @@
 {
-  "name": "kawa-mycenter-backend",
+  "name": "kawa_note-backend",
   "version": "1.0.0",
-  "description": "KawaMyCenter Backend API - Node.js/Fastify + PostgreSQL",
+  "description": "Kawa Note Backend API - Node.js/Fastify + PostgreSQL",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
