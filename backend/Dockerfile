@@ -54,13 +54,16 @@ WORKDIR /app
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
 
-# Copy dependencies and generated prisma client
+# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy prisma schema, seeds and package files
 COPY package*.json ./
 COPY prisma ./prisma
+
+# Generate Prisma client from current schema so seed-plans.js has
+# access to all models (including SubscriptionPlan).
+RUN npx prisma generate
 
 # Run migrations then seed mandatory catalog data.
 # Uses sh -c so both commands share the same exit code chain (&&).
