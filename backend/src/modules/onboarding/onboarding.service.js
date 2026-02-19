@@ -135,7 +135,19 @@ export const onboardingService = {
       throw error;
     }
 
-    return plans;
+    // Normalize to plain JS types expected by the frontend.
+    // priceMonthly comes as Prisma Decimal (not a JS number) — convert to float.
+    // Rename planId→id and planName→name to match the existing frontend contract.
+    return plans.map((plan) => ({
+      id: plan.planId,
+      name: plan.planName,
+      maxCompanies: plan.maxCompanies,
+      maxUsers: plan.maxUsers,
+      maxCustomers: plan.maxCustomers,
+      maxStorageGb: plan.maxStorageGb,
+      priceMonthly: parseFloat(plan.priceMonthly),
+      features: plan.features
+    }));
   },
 
   /**
