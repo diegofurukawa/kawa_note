@@ -178,6 +178,28 @@ model Relation {
   @@map("relations")
 }
 
+model SubscriptionPlan {
+  planId       Int      @id @default(autoincrement()) @map("plan_id")
+  planName     String   @unique @map("plan_name") @db.VarChar(50)
+
+  maxCompanies Int      @default(1) @map("max_companies")
+  maxUsers     Int      @default(10) @map("max_users")
+  maxCustomers Int      @default(100) @map("max_customers")
+  maxStorageGb Int      @default(50) @map("max_storage_gb")
+
+  priceMonthly Decimal  @default(0.00) @map("price_monthly") @db.Decimal(10, 2)
+
+  features     Json     @default("{}")
+
+  active       Boolean  @default(true)
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([active])
+  @@map("subscription_plans")
+}
+
 model App {
   id              String   @id @default(dbgenerated("gen_random_uuid()"))
   name            String

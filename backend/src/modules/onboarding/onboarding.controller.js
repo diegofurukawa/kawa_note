@@ -85,6 +85,16 @@ export const onboardingController = {
         data: plans
       });
     } catch (error) {
+      if (error.code === 'NO_PLANS_AVAILABLE') {
+        return reply.code(503).send({
+          success: false,
+          error: {
+            code: 'NO_PLANS_AVAILABLE',
+            message: 'Nenhum plano disponível no momento'
+          }
+        });
+      }
+
       request.log.error(error);
       return reply.code(500).send({
         success: false,

@@ -109,61 +109,33 @@ export const onboardingService = {
   },
 
   /**
-   * Get available plans
-   * @returns {Promise<Array>} List of plans
+   * Get available plans from database (subscription_plans table).
+   * Populated via prisma/seed-plans.js — must run on DB-INIT.
+   * @returns {Promise<Array>} List of active plans ordered by price
    */
   async getPlans() {
-    // Return hardcoded plans (can be extended to fetch from database)
-    return [
-      {
-        id: 'FREE',
-        name: 'FREE',
-        maxCompanies: 1,
-        maxUsers: 3,
-        maxCustomers: 50,
-        maxStorageGb: 5,
-        priceMonthly: 0,
-        features: {
-          notes: true,
-          folders: true,
-          relations: true,
-          sharing: false,
-          api: false
-        }
-      },
-      {
-        id: 'STARTER',
-        name: 'STARTER',
-        maxCompanies: 2,
-        maxUsers: 10,
-        maxCustomers: 200,
-        maxStorageGb: 20,
-        priceMonthly: 49.90,
-        features: {
-          notes: true,
-          folders: true,
-          relations: true,
-          sharing: true,
-          api: false
-        }
-      },
-      {
-        id: 'PRO',
-        name: 'PRO',
-        maxCompanies: 5,
-        maxUsers: 25,
-        maxCustomers: 1000,
-        maxStorageGb: 100,
-        priceMonthly: 149.90,
-        features: {
-          notes: true,
-          folders: true,
-          relations: true,
-          sharing: true,
-          api: true
-        }
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { active: true },
+      orderBy: { priceMonthly: 'asc' },
+      select: {
+        planId: true,
+        planName: true,
+        maxCompanies: true,
+        maxUsers: true,
+        maxCustomers: true,
+        maxStorageGb: true,
+        priceMonthly: true,
+        features: true
       }
-    ];
+    });
+
+    if (plans.length === 0) {
+      const error = new Error('Nenhum plano disponível. Execute seed-plans.js no DB-INIT.');
+      error.code = 'NO_PLANS_AVAILABLE';
+      throw error;
+    }
+
+    return plans;
   },
 
   /**
@@ -200,11 +172,12 @@ export const onboardingService = {
       data: { active: false }
     });
 
-    // Create new plan
-    const plans = await this.getPlans();
-    const selectedPlan = plans.find(p => p.name === validatedData.planName);
+    // Fetch selected plan from database
+    const selectedPlan = await prisma.subscriptionPlan.findUnique({
+      where: { planName: validatedData.planName }
+    });
 
-    if (!selectedPlan) {
+    if (!selectedPlan || !selectedPlan.active) {
       const error = new Error('Plano não encontrado');
       error.code = 'PLAN_NOT_FOUND';
       throw error;
@@ -213,7 +186,7 @@ export const onboardingService = {
     await prisma.tenantPlan.create({
       data: {
         tenantId: user.tenantId,
-        planName: selectedPlan.name,
+        planName: selectedPlan.planName,
         maxCompanies: selectedPlan.maxCompanies,
         maxUsers: selectedPlan.maxUsers,
         maxCustomers: selectedPlan.maxCustomers,

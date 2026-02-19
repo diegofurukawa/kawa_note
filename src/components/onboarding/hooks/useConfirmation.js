@@ -5,14 +5,14 @@ import { useMutation } from '@tanstack/react-query';
  * Manages onboarding completion
  */
 export function useConfirmation(tenantId, termsAccepted, onSuccess, onError) {
-  // Mutation for completing onboarding
+  // Mutation for completing onboarding — protected, uses token generated in Step 2
   const completeOnboardingMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('kawa_access_token')}`
         },
         body: JSON.stringify({})
       });

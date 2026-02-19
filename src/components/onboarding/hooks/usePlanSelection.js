@@ -8,15 +8,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 export function usePlanSelection(tenantId, onSuccess, onError) {
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  // Fetch plans
+  // Fetch plans — public endpoint, no Authorization header needed
   const { data: plansData, isLoading } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
-      const response = await fetch('/api/onboarding/plans', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await fetch('/api/onboarding/plans');
 
       if (!response.ok) {
         throw new Error('Erro ao buscar planos');
@@ -27,14 +23,14 @@ export function usePlanSelection(tenantId, onSuccess, onError) {
     }
   });
 
-  // Mutation for selecting plan
+  // Mutation for selecting plan — protected, uses token generated in Step 2
   const selectPlanMutation = useMutation({
     mutationFn: async (planName) => {
       const response = await fetch('/api/onboarding/step-3', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('kawa_access_token')}`
         },
         body: JSON.stringify({ planName })
       });

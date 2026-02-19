@@ -37,8 +37,8 @@ export default async function onboardingRoutes(app) {
   // Create user credentials (STEP 2) - PUBLIC (user does not exist yet)
   app.post('/step-2', onboardingController.createUserCredentials);
 
-  // Get available plans (STEP 3) - protected
-  app.get('/plans', { onRequest: authenticate }, onboardingController.getPlans);
+  // Get available plans (STEP 3) - PUBLIC (plans are public pricing data, no sensitive info)
+  app.get('/plans', onboardingController.getPlans);
 
   // Select plan (STEP 3) - protected
   app.post('/step-3', { onRequest: authenticate }, onboardingController.selectPlan);

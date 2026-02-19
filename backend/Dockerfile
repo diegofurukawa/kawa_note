@@ -37,8 +37,15 @@ RUN npx prisma generate
 
 # -----------------------------------------------------------------------------
 # STAGE 3: migrate
-# Responsibility: Execute database migrations
+# Responsibility: Execute database migrations + seed mandatory catalog data
 # Container is ephemeral - runs once and exits
+#
+# Sequence (both must succeed):
+#   1. prisma migrate deploy  — apply pending migrations
+#   2. node prisma/seed-plans.js — upsert subscription_plans catalog (idempotent)
+#
+# seed-plans.js is NOT optional: the onboarding flow requires plans to exist
+# in the database. Running it here guarantees consistency on every deploy.
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS migrate
 
@@ -51,12 +58,13 @@ RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy prisma schema and package files
+# Copy prisma schema, seeds and package files
 COPY package*.json ./
 COPY prisma ./prisma
 
-# Migration command - fails explicitly on error
-CMD ["npx", "prisma", "migrate", "deploy"]
+# Run migrations then seed mandatory catalog data.
+# Uses sh -c so both commands share the same exit code chain (&&).
+CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed-plans.js"]
 
 # -----------------------------------------------------------------------------
 # STAGE 4: runtime
