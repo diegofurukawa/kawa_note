@@ -6,20 +6,44 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/AuthContext';
 import { useLogin } from '@/api/useAuth';
+import { Eye, EyeOff, Shield, Smartphone, FolderOpen, Zap } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(1, 'Senha é obrigatória')
 });
 
+const benefits = [
+  {
+    icon: Shield,
+    title: 'Criptografia de ponta a ponta',
+    description: 'Suas anotações são criptografadas localmente. Só você tem acesso ao conteúdo.',
+  },
+  {
+    icon: Smartphone,
+    title: 'Acesse de qualquer lugar',
+    description: 'Funciona perfeitamente no celular, tablet ou computador.',
+  },
+  {
+    icon: FolderOpen,
+    title: 'Organização completa',
+    description: 'Pastas, subpastas e busca inteligente para encontrar tudo rapidamente.',
+  },
+  {
+    icon: Zap,
+    title: 'Sempre disponível',
+    description: 'Sincronização em tempo real para suas notas estarem sempre atualizadas.',
+  },
+];
+
 export default function Login() {
   const navigate = useNavigate();
   const { checkAppState } = useAuth();
   const loginMutation = useLogin();
   const [apiError, setApiError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -37,7 +61,6 @@ export default function Login() {
       const response = await loginMutation.mutateAsync(data);
       console.log('✅ Login response:', response);
 
-      // Token and encryption are already handled by useLogin hook
       console.log('🔄 Updating auth context...');
       await checkAppState();
 
@@ -58,16 +81,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
-          <CardDescription>Entre com suas credenciais para acessar</CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen flex">
+      {/* Left side - form */}
+      <div className="flex-1 flex items-center justify-center bg-white px-8 py-12 lg:px-16">
+        <div className="w-full max-w-sm">
+          {/* Logo */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-blue-600">KawaNote</h1>
+            <p className="text-sm text-slate-500 mt-1">Notas seguras com criptografia</p>
+          </div>
+
+          {/* Form header */}
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-slate-900">Informe seus dados abaixo</h2>
+          </div>
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+            {/* Email */}
+            <div className="space-y-1">
+              <Label htmlFor="email">
+                E-mail <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -76,49 +110,114 @@ export default function Login() {
                 disabled={loginMutation.isPending}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
+                <p className="text-xs text-red-500">{errors.email.message}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                {...register('password')}
-                disabled={loginMutation.isPending}
-              />
+            {/* Password */}
+            <div className="space-y-1">
+              <Label htmlFor="password">
+                Senha <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  {...register('password')}
+                  disabled={loginMutation.isPending}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password.message}</p>
+                <p className="text-xs text-red-500">{errors.password.message}</p>
               )}
             </div>
 
+            {/* Forgot password */}
+            <div>
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:underline"
+                onClick={() => {}}
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+
+            {/* API error */}
             {apiError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                 {apiError}
               </div>
             )}
 
+            {/* Submit */}
             <Button
               type="submit"
-              className="w-full"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               disabled={loginMutation.isPending}
             >
               {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
             </Button>
 
-            <div className="text-center text-sm">
-              <p className="text-slate-600">
-                Não tem conta?{' '}
-                <a href="/onboarding" className="text-slate-900 font-semibold hover:underline">
-                  Clique aqui!
-                </a>
-              </p>
+            {/* Register link */}
+            <div className="text-center">
+              <a
+                href="/onboarding"
+                className="text-sm text-blue-600 font-medium hover:underline"
+              >
+                Quero me cadastrar
+              </a>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Right side - marketing panel (hidden on mobile) */}
+      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-blue-800 to-blue-500 flex-col justify-center px-12 xl:px-20 py-12 text-white">
+        <div className="max-w-md">
+          {/* Headline */}
+          <h2 className="text-4xl font-bold leading-tight mb-4">
+            Suas notas.{' '}
+            <span className="text-blue-200">Seguras.</span>{' '}
+            Sempre.
+          </h2>
+          <p className="text-blue-100 text-base mb-10 leading-relaxed">
+            — o bloco de notas que protege seu conteúdo com criptografia de ponta a ponta, para que só você tenha acesso ao que escreve.
+          </p>
+
+          {/* Benefits list */}
+          <ul className="space-y-6 mb-12">
+            {benefits.map(({ icon: Icon, title, description }) => (
+              <li key={title} className="flex gap-4 items-start">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/15 flex items-center justify-center">
+                  <Icon size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{title}</p>
+                  <p className="text-blue-200 text-sm mt-0.5 leading-relaxed">{description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* CTA button */}
+          <a href="/onboarding">
+            <button className="w-full border border-white/60 text-white rounded-md py-3 px-6 text-sm font-medium hover:bg-white/10 transition-colors">
+              Criar conta grátis
+            </button>
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
