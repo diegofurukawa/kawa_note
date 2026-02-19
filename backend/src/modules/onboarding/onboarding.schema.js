@@ -2,9 +2,12 @@ import { z } from 'zod';
 import { normalizePhone } from '../../utils/normalizers.js';
 
 /**
- * Schema for updating user credentials (STEP 2)
+ * Schema for creating user credentials (STEP 2)
+ * Public endpoint — user does not exist yet.
+ * Requires tenantId to associate the new user to the correct tenant.
  */
-export const updateUserCredentialsSchema = z.object({
+export const createUserCredentialsSchema = z.object({
+  tenantId: z.string().uuid('tenantId inválido'),
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
   email: z.string().email('Email inválido'),
   phone: z.string()

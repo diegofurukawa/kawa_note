@@ -1,6 +1,30 @@
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/database.js';
-import { updateUserCredentialsSchema, selectPlanSchema } from './onboarding.schema.js';
+import { env } from '../../config/env.js';
+import { createUserCredentialsSchema, selectPlanSchema } from './onboarding.schema.js';
+
+/**
+ * Generate access + refresh tokens for a user.
+ * @param {string} userId
+ * @param {string} tenantId
+ * @returns {{ accessToken: string, refreshToken: string }}
+ */
+function generateTokens(userId, tenantId) {
+  const accessToken = jwt.sign(
+    { userId, tenantId, type: 'access' },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN }
+  );
+
+  const refreshToken = jwt.sign(
+    { userId, tenantId, type: 'refresh' },
+    env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  return { accessToken, refreshToken };
+}
 
 /**
  * Onboarding Service
@@ -8,71 +32,80 @@ import { updateUserCredentialsSchema, selectPlanSchema } from './onboarding.sche
  */
 export const onboardingService = {
   /**
-   * Update user credentials (STEP 2)
-   * @param {string} userId - User ID
-   * @param {Object} data - Credentials data
-   * @returns {Promise<Object>} Updated tenant
+   * Create user credentials (STEP 2) — PUBLIC
+   * The user does not exist yet. This method creates it.
+   * @param {Object} data - { tenantId, name, email, phone, password }
+   * @returns {Promise<{ userId: string, tenantId: string, accessToken: string, refreshToken: string }>}
    */
-  async updateUserCredentials(userId, data) {
-    // Validate input
-    const validatedData = updateUserCredentialsSchema.parse(data);
+  async createUserCredentials(data) {
+    // Validate input (includes tenantId)
+    const validatedData = createUserCredentialsSchema.parse(data);
 
-    // Get user with tenant
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { tenant: true }
+    // Verify tenant exists and is at STEP_1
+    const tenant = await prisma.tenant.findUnique({
+      where: { tenantId: validatedData.tenantId }
     });
 
-    if (!user) {
-      const error = new Error('Usuário não encontrado');
-      error.code = 'USER_NOT_FOUND';
-      throw error;
-    }
-
-    if (!user.tenantId) {
+    if (!tenant) {
       const error = new Error('Tenant não encontrado');
       error.code = 'TENANT_NOT_FOUND';
       throw error;
     }
 
-    // Check if email is already in use by another user
-    if (validatedData.email !== user.email) {
-      const existingUser = await prisma.user.findUnique({
-        where: { email: validatedData.email }
-      });
-
-      if (existingUser && existingUser.id !== userId) {
-        const error = new Error('Email já está em uso');
-        error.code = 'EMAIL_IN_USE';
-        throw error;
-      }
+    if (tenant.onboardingStep !== 'STEP_1') {
+      const error = new Error('Tenant já possui usuário cadastrado');
+      error.code = 'TENANT_STEP_INVALID';
+      throw error;
     }
 
-    // Update user data
-    const updateData = {
-      name: validatedData.name,
-      email: validatedData.email
-    };
-
-    if (validatedData.password) {
-      updateData.password = await bcrypt.hash(validatedData.password, 12);
-    }
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: updateData
+    // Check if email is already in use
+    const existingUser = await prisma.user.findUnique({
+      where: { email: validatedData.email }
     });
 
-    // Update tenant with phone and step
-    const tenant = await prisma.tenant.update({
-      where: { tenantId: user.tenantId },
+    if (existingUser) {
+      const error = new Error('Email já está em uso');
+      error.code = 'EMAIL_IN_USE';
+      throw error;
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(validatedData.password, 12);
+
+    // Create user linked to tenant
+    const user = await prisma.user.create({
+      data: {
+        name: validatedData.name,
+        email: validatedData.email,
+        password: hashedPassword,
+        tenantId: validatedData.tenantId
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        tenantId: true,
+        createdAt: true
+      }
+    });
+
+    // Update tenant with phone and advance to STEP_2
+    await prisma.tenant.update({
+      where: { tenantId: validatedData.tenantId },
       data: {
         mobilePhone: validatedData.phone,
         onboardingStep: 'STEP_2'
       }
     });
 
-    return tenant;
+    // Generate tokens
+    const tokens = generateTokens(user.id, user.tenantId);
+
+    return {
+      userId: user.id,
+      tenantId: user.tenantId,
+      ...tokens
+    };
   },
 
   /**

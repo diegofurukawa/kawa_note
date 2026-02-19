@@ -6,35 +6,36 @@ import { onboardingService } from './onboarding.service.js';
  */
 export const onboardingController = {
   /**
-   * Update user credentials (STEP 2)
-   * PATCH /api/onboarding/step-2
+   * Create user credentials (STEP 2) — PUBLIC
+   * POST /api/onboarding/step-2
+   * Body: { tenantId, name, email, phone, password }
+   * Returns: { userId, tenantId, accessToken, refreshToken }
    */
-  async updateUserCredentials(request, reply) {
+  async createUserCredentials(request, reply) {
     try {
-      const userId = request.user.id;
-      const result = await onboardingService.updateUserCredentials(userId, request.body);
-      
-      return reply.code(200).send({
+      const result = await onboardingService.createUserCredentials(request.body);
+
+      return reply.code(201).send({
         success: true,
         data: result
       });
     } catch (error) {
-      if (error.code === 'USER_NOT_FOUND') {
-        return reply.code(404).send({
-          success: false,
-          error: {
-            code: 'USER_NOT_FOUND',
-            message: 'Usuário não encontrado'
-          }
-        });
-      }
-
       if (error.code === 'TENANT_NOT_FOUND') {
         return reply.code(404).send({
           success: false,
           error: {
             code: 'TENANT_NOT_FOUND',
             message: 'Tenant não encontrado'
+          }
+        });
+      }
+
+      if (error.code === 'TENANT_STEP_INVALID') {
+        return reply.code(409).send({
+          success: false,
+          error: {
+            code: 'TENANT_STEP_INVALID',
+            message: 'Tenant já possui usuário cadastrado'
           }
         });
       }
@@ -65,7 +66,7 @@ export const onboardingController = {
         success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Erro ao atualizar credenciais'
+          message: 'Erro ao criar credenciais'
         }
       });
     }
@@ -78,7 +79,7 @@ export const onboardingController = {
   async getPlans(request, reply) {
     try {
       const plans = await onboardingService.getPlans();
-      
+
       return reply.code(200).send({
         success: true,
         data: plans
@@ -103,7 +104,7 @@ export const onboardingController = {
     try {
       const userId = request.user.id;
       const result = await onboardingService.selectPlan(userId, request.body);
-      
+
       return reply.code(200).send({
         success: true,
         data: result
@@ -159,7 +160,7 @@ export const onboardingController = {
     try {
       const userId = request.user.id;
       const result = await onboardingService.completeOnboarding(userId);
-      
+
       return reply.code(200).send({
         success: true,
         data: result

@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
-import { useAuth } from '@/lib/AuthContext';
+import { setAppToken } from '@/lib/app-params';
 
 /**
  * Validation schema for user credentials
@@ -26,33 +26,32 @@ const userCredentialsSchema = z.object({
 
 /**
  * useUserCredentialsForm Hook
- * Manages form state and API calls for user credentials
+ * Manages form state and API calls for user credentials (STEP 2 — public)
+ * Creates the user, receives accessToken + refreshToken, saves them.
  */
 export function useUserCredentialsForm(tenantId, onSuccess, onError) {
-  const { user } = useAuth();
-
   const form = useForm({
     resolver: zodResolver(userCredentialsSchema),
     mode: 'onBlur',
     defaultValues: {
-      name: user?.name || '',
-      email: user?.email || '',
+      name: '',
+      email: '',
       phone: '',
       password: '',
       confirmPassword: ''
     }
   });
 
-  // Mutation for updating user credentials
-  const updateCredentialsMutation = useMutation({
+  // Mutation for creating user credentials
+  const createCredentialsMutation = useMutation({
     mutationFn: async (data) => {
       const response = await fetch('/api/onboarding/step-2', {
-        method: 'PATCH',
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('kawa_access_token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          tenantId,
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -62,12 +61,16 @@ export function useUserCredentialsForm(tenantId, onSuccess, onError) {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error?.message || 'Erro ao atualizar credenciais');
+        throw new Error(error.error?.message || 'Erro ao criar credenciais');
       }
 
       return response.json();
     },
     onSuccess: (response) => {
+      if (response.data?.accessToken) {
+        setAppToken(response.data.accessToken);
+        localStorage.setItem('kawa_refresh_token', response.data.refreshToken);
+      }
       onSuccess?.();
     },
     onError: (error) => {
@@ -77,7 +80,7 @@ export function useUserCredentialsForm(tenantId, onSuccess, onError) {
 
   const onSubmit = async (data) => {
     try {
-      await updateCredentialsMutation.mutateAsync(data);
+      await createCredentialsMutation.mutateAsync(data);
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -85,8 +88,8 @@ export function useUserCredentialsForm(tenantId, onSuccess, onError) {
 
   return {
     form,
-    isSubmitting: updateCredentialsMutation.isPending,
-    error: updateCredentialsMutation.error?.message || null,
+    isSubmitting: createCredentialsMutation.isPending,
+    error: createCredentialsMutation.error?.message || null,
     onSubmit: form.handleSubmit(onSubmit)
   };
 }

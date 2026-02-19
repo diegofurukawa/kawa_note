@@ -3,29 +3,30 @@ import { authenticate } from '../../middleware/auth.middleware.js';
 
 /**
  * Onboarding Routes
- * 
+ *
  * ONBOARDING FLOW:
  * ================
  * STEP 1: Create Tenant (POST /api/tenants)
  *   - Public endpoint
  *   - Creates tenant with basic info (name, document, address)
  *   - Returns tenantId
- * 
- * STEP 2: Update User Credentials (PATCH /api/onboarding/step-2)
- *   - Protected endpoint (requires auth)
- *   - Updates user email/password
- *   - Associates user with tenant
- * 
+ *
+ * STEP 2: Create User Credentials (POST /api/onboarding/step-2)
+ *   - PUBLIC endpoint (no auth required — this IS the user creation step)
+ *   - Receives { tenantId, name, email, phone, password }
+ *   - Creates user linked to the tenant
+ *   - Returns { userId, tenantId, accessToken, refreshToken }
+ *
  * STEP 3: Select Plan (POST /api/onboarding/step-3)
  *   - Protected endpoint (requires auth)
  *   - User selects subscription plan
  *   - Plan is associated with tenant
- * 
+ *
  * STEP 4: Complete Onboarding (POST /api/onboarding/complete)
  *   - Protected endpoint (requires auth)
  *   - Marks tenant as active
  *   - User can now use the application
- * 
+ *
  * VALIDATION:
  * - Steps must be completed in order
  * - Cannot skip steps
@@ -33,8 +34,8 @@ import { authenticate } from '../../middleware/auth.middleware.js';
  */
 
 export default async function onboardingRoutes(app) {
-  // Update user credentials (STEP 2) - protected
-  app.patch('/step-2', { onRequest: authenticate }, onboardingController.updateUserCredentials);
+  // Create user credentials (STEP 2) - PUBLIC (user does not exist yet)
+  app.post('/step-2', onboardingController.createUserCredentials);
 
   // Get available plans (STEP 3) - protected
   app.get('/plans', { onRequest: authenticate }, onboardingController.getPlans);
