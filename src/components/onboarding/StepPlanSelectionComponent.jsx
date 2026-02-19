@@ -44,16 +44,16 @@ export function StepPlanSelectionComponent({ tenantId, onSuccess, onError, onBac
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => (
               <div
-                key={plan.id}
-                onClick={() => selectPlan(plan.id)}
+                key={plan.name}
+                onClick={() => selectPlan(plan.name)}
                 className={`relative p-6 rounded-lg border-2 cursor-pointer transition-all ${
-                  selectedPlan === plan.id
+                  selectedPlan === plan.name
                     ? 'border-slate-900 bg-slate-50'
                     : 'border-slate-200 hover:border-slate-300'
                 }`}
               >
                 {/* Selected Badge */}
-                {selectedPlan === plan.id && (
+                {selectedPlan === plan.name && (
                   <div className="absolute top-4 right-4 bg-green-500 text-white rounded-full p-1">
                     <Check size={16} />
                   </div>
