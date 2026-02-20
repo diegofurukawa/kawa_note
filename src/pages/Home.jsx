@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import TabBar from '../components/layout/TabBar';
+import BottomNav from '../components/layout/BottomNav';
+import FAB from '../components/layout/FAB';
+import MobileSearchModal from '../components/layout/MobileSearchModal';
+import MobileNoteStrip from '../components/layout/MobileNoteStrip';
 import QuickEditor from '../components/notes/QuickEditor';
 import NoteCard from '../components/notes/NoteCard';
 import NoteEditor from '../components/notes/NoteEditor';
@@ -9,13 +13,14 @@ import MoveNoteDialog from '../components/notes/MoveNoteDialog';
 import { useNotes } from '@/api/useNotes';
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence } from "framer-motion";
-import { Brain, Sparkles, ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { Brain, Sparkles, ChevronLeft, ChevronRight, Lock, Menu } from "lucide-react";
 import { useFolderHierarchy } from '@/api/useFolders';
 import { Button } from "@/components/ui/button";
 import { needsMigration, migrateAllNotes, getMigrationStatusMessage } from '@/lib/noteMigration';
 import { isKeyAvailable } from '@/lib/keyManager';
 import { NO_FOLDER_SENTINEL } from '@/lib/constants';
 import { useSidebarState } from '@/hooks/useSidebarState';
+import { useMobileLayout } from '@/hooks/useMobileLayout';
 import { toast } from 'sonner';
 
 /** @typedef {import('@/types/models').Note} Note */
@@ -42,6 +47,8 @@ export default function Home() {
   const [migrationStatus, setMigrationStatus] = useState(/** @type {'idle' | 'running' | 'completed' | 'error'} */ ('idle'));
   const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarState();
+  const { isMobile, isSidebarOpen, openSidebar, closeSidebar, activeBottomTab, setActiveBottomTab } = useMobileLayout();
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const encryptionToastShown = useRef(false);
 
   const { data: notesResponse = { data: [] }, isLoading, refetch } = useNotes();
@@ -354,22 +361,25 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar - Desktop only, or Mobile drawer */}
       <Sidebar
         selectedFolder={selectedFolder}
         onSelectFolder={setSelectedFolder}
         notesCount={notes.length}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobile={isMobile}
+        isSidebarOpen={isSidebarOpen}
+        onCloseSidebar={closeSidebar}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content — pb-28 em mobile quando strip visível, pb-16 normal, pb-0 desktop */}
+      <div className={`flex-1 flex flex-col overflow-hidden md:pb-0 ${isMobile && activeTab ? 'pb-28' : 'pb-16'}`}>
         {/* Header - Always visible */}
         <div className="border-b border-slate-200 bg-white">
           {/* Migration Status Banner */}
           {migrationStatus === 'running' && (
-            <div className="mx-6 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+            <div className="mx-3 md:mx-6 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
               <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-blue-900">
@@ -383,7 +393,19 @@ export default function Home() {
           )}
 
           {/* Título + SearchBar na mesma linha */}
-          <div className="flex items-center gap-3 px-6 py-3">
+          <div className="flex items-center gap-2 px-3 md:px-6 py-3">
+            {/* Hamburger menu - Mobile only */}
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 shrink-0 md:hidden"
+                onClick={openSidebar}
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
+            )}
+
             {navList.length > 1 && (
               <Button
                 variant="ghost"
@@ -413,8 +435,8 @@ export default function Home() {
               </Button>
             )}
 
-            {/* SearchBar inline */}
-            <div className="flex-1">
+            {/* SearchBar inline - Desktop only */}
+            <div className="flex-1 hidden md:block">
               <SearchBar
                 onSearch={setSearchTerm}
                 onFilterChange={setFilters}
@@ -424,23 +446,25 @@ export default function Home() {
               />
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-slate-500 shrink-0">
+            <div className="sm:flex hidden items-center gap-2 text-sm text-slate-500 shrink-0">
               <Sparkles className="w-4 h-4" />
               <span>{notes.length} total</span>
             </div>
           </div>
         </div>
 
-        {/* Tab Bar - Always visible */}
-        <TabBar
-          tabs={openTabs}
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          onCloseTab={closeTab}
-          onNavigatePrev={navigateTabPrev}
-          onNavigateNext={navigateTabNext}
-          onNewTab={openNewTab}
-        />
+        {/* Tab Bar - Hidden on mobile */}
+        <div className="md:block hidden">
+          <TabBar
+            tabs={openTabs}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onCloseTab={closeTab}
+            onNavigatePrev={navigateTabPrev}
+            onNavigateNext={navigateTabNext}
+            onNewTab={openNewTab}
+          />
+        </div>
 
         {/* Content Region - Changes based on activeTab */}
         <div className="flex-1 overflow-hidden flex flex-col">
@@ -495,7 +519,7 @@ export default function Home() {
                 <h2 className="text-sm font-medium text-slate-500 mb-3 uppercase tracking-wide">
                   Fixadas
                 </h2>
-                <div className="grid gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                   <AnimatePresence>
                     {pinnedNotes.map(note => (
                       <div
@@ -525,7 +549,7 @@ export default function Home() {
                     Todas as notas
                   </h2>
                 )}
-                <div className="grid gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                   <AnimatePresence>
                     {regularNotes.map(note => (
                       <div
@@ -560,6 +584,50 @@ export default function Home() {
         open={noteToMove !== null}
         onOpenChange={(open) => { if (!open) setNoteToMove(null); }}
         onMoved={refetch}
+      />
+
+      {/* Bottom Navigation - Mobile only */}
+      {isMobile && (
+        <BottomNav
+          activeTab={activeBottomTab}
+          onTabChange={(tab) => {
+            setActiveBottomTab(tab);
+            if (tab === 'folders') {
+              openSidebar();
+            } else if (tab === 'search') {
+              setIsMobileSearchOpen(true);
+            } else if (tab === 'notes') {
+              setSelectedFolder(null);
+            }
+          }}
+        />
+      )}
+
+      {/* FAB - Mobile only — sobe quando a MobileNoteStrip está visível */}
+      {isMobile && <FAB onClick={openNewTab} elevated={isMobile && !!activeTab} />}
+
+      {/* Mobile Note Strip — navegação entre notas, acima da BottomNav */}
+      {isMobile && (
+        <MobileNoteStrip
+          tabs={openTabs}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onBack={() => setActiveTab(null)}
+          onNewNote={openNewTab}
+        />
+      )}
+
+      {/* Mobile Search Modal */}
+      <MobileSearchModal
+        open={isMobileSearchOpen}
+        onClose={() => {
+          setIsMobileSearchOpen(false);
+          setActiveBottomTab('notes');
+        }}
+        onSelectResult={(note) => {
+          openNoteInTab(note);
+          setActiveBottomTab('notes');
+        }}
       />
     </div>
   );

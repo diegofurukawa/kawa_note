@@ -16,7 +16,7 @@ export default function TabBar({ tabs, activeTab, onSelectTab, onCloseTab, onNav
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 md:h-7 md:w-7 min-h-[44px] min-w-[44px] md:min-h-auto md:min-w-auto"
               onClick={onNavigatePrev}
               title="Aba anterior (Ctrl+Shift+Tab)"
             >
@@ -25,7 +25,7 @@ export default function TabBar({ tabs, activeTab, onSelectTab, onCloseTab, onNav
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 md:h-7 md:w-7 min-h-[44px] min-w-[44px] md:min-h-auto md:min-w-auto"
               onClick={onNavigateNext}
               title="Próxima aba (Ctrl+Tab)"
             >
@@ -37,7 +37,7 @@ export default function TabBar({ tabs, activeTab, onSelectTab, onCloseTab, onNav
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+            className="h-7 w-7 md:h-7 md:w-7 min-h-[44px] min-w-[44px] md:min-h-auto md:min-w-auto text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
             onClick={onNewTab}
             title="Nova nota (Ctrl+N)"
           >
@@ -76,7 +76,7 @@ export default function TabBar({ tabs, activeTab, onSelectTab, onCloseTab, onNav
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100"
+                    className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100 min-h-[44px] min-w-[44px] md:min-h-auto md:min-w-auto"
                     onClick={(e) => {
                       e.stopPropagation();
                       onCloseTab(tab.id);

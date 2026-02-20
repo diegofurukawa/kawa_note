@@ -124,7 +124,7 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
             {searchTerm ? (
               <>
                 {searchResults.length > 0 ? (
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className="max-h-64 md:max-h-96 overflow-y-auto">
                     {/* Resultados diretos */}
                     {searchResults.filter(r => !r.isRelated).length > 0 && (
                       <div>

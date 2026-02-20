@@ -346,13 +346,13 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
             <Textarea
               value={editedNote.content}
               onChange={(e) => handleChange('content', e.target.value)}
-              className="min-h-[400px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0"
+              className="min-h-[200px] md:min-h-[400px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0"
               placeholder="Comece a escrever em Markdown..."
               autoFocus
             />
           ) : (
             <div
-              className="min-h-[400px] prose prose-sm max-w-none cursor-text"
+              className="min-h-[200px] md:min-h-[400px] prose prose-sm max-w-none cursor-text"
               onDoubleClick={() => setIsEditMode(true)}
               title="Clique duplo para editar"
             >
@@ -383,8 +383,8 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
         </div>
       </div>
 
-      {/* Footer hint */}
-      <div className="px-6 py-2 border-t border-slate-200 bg-slate-50">
+      {/* Footer hint - Desktop only */}
+      <div className="hidden md:block px-6 py-2 border-t border-slate-200 bg-slate-50">
         <p className="text-xs text-slate-500">
           ⌘/Ctrl + S para salvar • ESC para fechar
         </p>

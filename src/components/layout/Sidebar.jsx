@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
@@ -31,7 +32,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { NO_FOLDER_SENTINEL } from "@/lib/constants";
-import { useFolders, useFolderHierarchy, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
+import { useFolderHierarchy, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
 import { useNotes } from '@/api/useNotes';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
 import { useAuth } from '@/components/providers/AuthContext';
@@ -262,28 +263,28 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
 }
 
 /**
- * Sidebar - Componente de navegação lateral com pastas e usuário
+ * SidebarContent - Conteúdo compartilhado entre modo desktop e mobile drawer
  * @param {Object} props - Props do componente
- * @param {Object} props.selectedFolder - Pasta selecionada atualmente
+ * @param {Object} props.selectedFolder - Pasta selecionada
  * @param {Function} props.onSelectFolder - Callback ao selecionar pasta
- * @param {number} props.notesCount - Quantidade total de notas
- * @param {boolean} props.isCollapsed - Se a sidebar está recolhida
+ * @param {number} props.notesCount - Total de notas
+ * @param {boolean} props.isCollapsed - Se está recolhido
  * @param {Function} props.onToggleCollapse - Callback para alternar colapso
- * @returns {JSX.Element} Sidebar com navegação de pastas
+ * @param {boolean} props.isMobile - Se está em modo mobile
+ * @returns {JSX.Element} Conteúdo do sidebar
  */
-// @ts-ignore
-export default function Sidebar({ 
+function SidebarContent({ 
   selectedFolder, 
   onSelectFolder, 
   notesCount, 
   isCollapsed = false, 
-  onToggleCollapse
+  onToggleCollapse,
+  isMobile = false
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const { data: foldersResponse = { data: [] } } = useFolderHierarchy();
 
-  // hierarchy pode vir como árvore (com children) ou flat — achata para lista flat
   const flattenFolders = (items, result = []) => {
     for (const item of items) {
       result.push(item);
@@ -300,15 +301,11 @@ export default function Sidebar({
 
   const rootFolders = folders.filter((/** @type {Folder} */ f) => !f.parentFolderId);
   
-  // Handle logout with cache clearing
   const handleLogout = async () => {
-    // Clear React Query cache before logout
     queryClient.clear();
-    // Call logout from AuthContext
     await logout();
   };
   
-  // Generate user initials for avatar
   const getUserInitials = () => {
     if (!user) return '?';
     if (user.name) {
@@ -323,7 +320,6 @@ export default function Sidebar({
     return '?';
   };
   
-  // Generate avatar color from email/name
   const getAvatarColor = () => {
     const str = user?.email || user?.name || 'default';
     let hash = 0;
@@ -343,10 +339,8 @@ export default function Sidebar({
   };
 
   return (
-    <div className={cn(
-      "h-screen bg-slate-50 border-r border-slate-200 flex flex-col transition-all duration-300",
-      isCollapsed ? "w-16" : "w-64"
-    )}>
+    <>
+      {/* Header */}
       <div className="p-4 border-b border-slate-200">
         {isCollapsed ? (
           <div className="flex items-center justify-center">
@@ -366,6 +360,7 @@ export default function Sidebar({
         )}
       </div>
 
+      {/* Folders ScrollArea */}
       {/* @ts-ignore */}
       <ScrollArea className="flex-1 px-3 py-3">
         <div className="space-y-1">
@@ -481,7 +476,6 @@ export default function Sidebar({
                       setNewFolderName('');
                       toast.success('Pasta criada com sucesso');
                     } catch (error) {
-                      // Check if it's an encryption error and handle logout
                       if (checkAndHandleEncryptionError(error)) {
                         return;
                       }
@@ -579,38 +573,103 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Toggle Button */}
-      <div className="p-3 border-t border-slate-200">
-        {isCollapsed ? (
-          <TooltipProvider delayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onToggleCollapse}
-                  className="w-full"
-                >
-                  <PanelLeftOpen className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Expandir sidebar</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggleCollapse}
-            className="w-full justify-start text-slate-600"
-          >
-            <PanelLeftClose className="w-4 h-4 mr-2" />
-            Recolher
-          </Button>
-        )}
-      </div>
+      {/* Toggle Button - Desktop only */}
+      {!isMobile && (
+        <div className="p-3 border-t border-slate-200">
+          {isCollapsed ? (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onToggleCollapse}
+                    className="w-full"
+                  >
+                    <PanelLeftOpen className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Expandir sidebar</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleCollapse}
+              className="w-full justify-start text-slate-600"
+            >
+              <PanelLeftClose className="w-4 h-4 mr-2" />
+              Recolher
+            </Button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Sidebar - Componente de navegação lateral com suporte a modo mobile (drawer) e desktop
+ * @param {Object} props - Props do componente
+ * @param {Object} props.selectedFolder - Pasta selecionada atualmente
+ * @param {Function} props.onSelectFolder - Callback ao selecionar pasta
+ * @param {number} props.notesCount - Quantidade total de notas
+ * @param {boolean} props.isCollapsed - Se a sidebar está recolhida (desktop only)
+ * @param {Function} props.onToggleCollapse - Callback para alternar colapso (desktop only)
+ * @param {boolean} props.isMobile - Se está em modo mobile
+ * @param {boolean} props.isSidebarOpen - Se o drawer está aberto (mobile only)
+ * @param {Function} props.onCloseSidebar - Callback para fechar drawer (mobile only)
+ * @returns {JSX.Element} Sidebar com suporte a desktop e mobile
+ */
+// @ts-ignore
+export default function Sidebar({ 
+  selectedFolder, 
+  onSelectFolder, 
+  notesCount, 
+  isCollapsed = false, 
+  onToggleCollapse,
+  isMobile = false,
+  isSidebarOpen = false,
+  onCloseSidebar = () => {}
+}) {
+  // Mobile: renderizar como Sheet drawer
+  if (isMobile) {
+    return (
+      <Sheet open={isSidebarOpen} onOpenChange={onCloseSidebar}>
+        <SheetContent side="left" className="w-3/4 max-w-[280px] p-0 flex flex-col">
+          <SidebarContent
+            selectedFolder={selectedFolder}
+            onSelectFolder={(folder) => {
+              onSelectFolder(folder);
+              onCloseSidebar();
+            }}
+            notesCount={notesCount}
+            isCollapsed={false}
+            onToggleCollapse={() => {}}
+            isMobile={true}
+          />
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  // Desktop: renderizar como sidebar permanente
+  return (
+    <div className={cn(
+      "h-screen bg-slate-50 border-r border-slate-200 flex flex-col transition-all duration-300",
+      isCollapsed ? "w-16" : "w-64"
+    )}>
+      <SidebarContent
+        selectedFolder={selectedFolder}
+        onSelectFolder={onSelectFolder}
+        notesCount={notesCount}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={onToggleCollapse}
+        isMobile={false}
+      />
     </div>
   );
 }
