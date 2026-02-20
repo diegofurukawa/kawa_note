@@ -16,7 +16,7 @@ COPY package*.json ./
 
 # Install dependencies using lockfile for determinism
 # Note: Commit package-lock.json to repository for full determinism
-RUN npm ci --silent && npm cache clean --force
+RUN npm install --legacy-peer-deps && npm cache clean --force
 
 # -----------------------------------------------------------------------------
 # STAGE 2: build

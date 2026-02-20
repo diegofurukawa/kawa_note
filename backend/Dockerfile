@@ -67,7 +67,8 @@ RUN npx prisma generate
 
 # Run migrations then seed mandatory catalog data.
 # Uses sh -c so both commands share the same exit code chain (&&).
-CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed-plans.js"]
+# First, resolve any failed migrations, then deploy pending ones.
+CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260220000000_add_user_sessions 2>/dev/null || true && npx prisma migrate deploy && node prisma/seed-plans.js"]
 
 # -----------------------------------------------------------------------------
 # STAGE 4: runtime

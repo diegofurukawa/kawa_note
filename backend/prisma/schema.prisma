@@ -57,6 +57,7 @@ model Tenant {
   folders     Folder[]
   notes       Note[]
   relations   Relation[]
+  sessions    UserSession[]
 
   @@unique([document])
   @@index([tenantType])
@@ -103,11 +104,34 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  tenant  Tenant?  @relation(fields: [tenantId], references: [tenantId], onDelete: SetNull)
-  notes   Note[]
-  folders Folder[]
+  tenant   Tenant?        @relation(fields: [tenantId], references: [tenantId], onDelete: SetNull)
+  notes    Note[]
+  folders  Folder[]
+  sessions UserSession[]
 
   @@map("users")
+}
+
+model UserSession {
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
+  userId       String    @map("user_id")
+  tenantId     String    @map("tenant_id") @db.VarChar(64)
+  tokenHash    String    @map("token_hash")
+  deviceInfo   Json?     @map("device_info")
+  ipAddress    String?   @map("ip_address")
+  lastUsedAt   DateTime  @default(now()) @map("last_used_at")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@index([userId], name: "idx_user_session_user_id")
+  @@index([tokenHash], name: "idx_user_session_token_hash")
+  @@index([expiresAt], name: "idx_user_session_expires_at")
+  @@map("user_sessions")
 }
 
 model Folder {

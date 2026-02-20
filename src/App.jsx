@@ -1,7 +1,9 @@
 import { Toaster } from "@/components/ui/toaster"
+import { InstallPrompt } from "@/components/ui/InstallPrompt"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/components/providers/NavigationTracker'
+import { UnlockScreen } from '@/components/providers/UnlockScreen'
 import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import PageNotFound from '@/pages/PageNotFound';
@@ -63,7 +65,7 @@ const OnboardingRoute = () => {
 };
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user, requiresUnlock } = useAuth();
   const [shouldCheckOnboarding, setShouldCheckOnboarding] = useState(true);
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
   const navigate = useNavigate();
@@ -93,6 +95,11 @@ const AuthenticatedApp = () => {
 
     checkOnboardingStatus();
   }, [user, shouldCheckOnboarding, navigate]);
+
+  // Show unlock screen if user is authenticated but encryption key is not available
+  if (requiresUnlock) {
+    return <UnlockScreen />;
+  }
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth || isCheckingOnboarding) {
@@ -146,6 +153,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <NavigationTracker />
+          <InstallPrompt />
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginRoute />} />

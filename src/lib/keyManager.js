@@ -5,7 +5,7 @@
  * Security Model:
  * - Key stored in memory only (cleared on logout/page refresh)
  * - No persistence in sessionStorage (would require extractable key)
- * - Page refresh triggers auto-logout (handled by useNotes.js)
+ * - Page refresh triggers unlock screen (handled by AuthContext)
  * - All keys cleared on logout
  */
 
@@ -30,6 +30,17 @@ export async function initializeEncryption(password, salt) {
   console.log('✅ keyManager: Encryption key derived and stored in memory');
   
   return encryptionKey;
+}
+
+/**
+ * Re-derive encryption key (used for unlock after page refresh)
+ * @param {string} password - User password
+ * @param {string} salt - User's encryption salt (from backend)
+ * @returns {Promise<CryptoKey>} Derived encryption key
+ */
+export async function rederiveKey(password, salt) {
+  console.log('🔐 keyManager: Re-deriving encryption key...');
+  return initializeEncryption(password, salt);
 }
 
 /**

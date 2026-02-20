@@ -9,14 +9,12 @@ import { handleEncryptionError, checkAndHandleEncryptionError } from '@/lib/erro
 
 const NOTES_QUERY_KEY = 'notes';
 
-// Module-level flag to prevent multiple logout triggers
-let encryptionLogoutTriggered = false;
-
 /**
  * Reset encryption logout flag (called on successful login)
  */
 export function resetEncryptionLogoutFlag() {
-  encryptionLogoutTriggered = false;
+  // Flag removed - encryption state now managed by AuthContext
+  console.log('✅ Encryption state reset on login');
 }
 
 /**
@@ -73,15 +71,8 @@ async function decryptNoteData(note) {
 
   const key = await getKey();
   if (!key) {
-    // Key not available - trigger logout ONCE
+    // Key not available - return placeholder without triggering logout
     console.warn('Encryption key not available. Cannot decrypt note:', note.id);
-    
-    if (!encryptionLogoutTriggered) {
-      encryptionLogoutTriggered = true;
-      // Trigger logout with encryption error
-      const error = new Error('Encryption key not available. Please log in again.');
-      checkAndHandleEncryptionError(error);
-    }
     
     return {
       ...note,
@@ -188,6 +179,9 @@ export const useCreateNote = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      
+      // Dispatch event for PWA install prompt trigger
+      window.dispatchEvent(new Event('noteCreated'));
     }
   });
 };

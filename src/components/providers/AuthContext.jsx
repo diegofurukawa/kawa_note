@@ -9,6 +9,8 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isEncryptionReady, setIsEncryptionReady] = useState(false);
+  const [requiresUnlock, setRequiresUnlock] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
   const [authError, setAuthError] = useState(null);
@@ -110,16 +112,34 @@ export const AuthProvider = ({ children }) => {
       // Now check if the user is authenticated using centralized apiClient
       setIsLoadingAuth(true);
 
-      const userData = await apiClient.get('/auth/me');
+      const response = await apiClient.get('/auth/me');
+      const userData = response.data || response;
       console.log('✅ User authenticated:', userData);
       setUser(userData);
       setIsAuthenticated(true);
+      
+      // Check if encryption key is available in memory
+      const { isKeyAvailable } = await import('@/lib/keyManager');
+      const keyAvailable = await isKeyAvailable();
+      
+      if (keyAvailable) {
+        console.log('✅ Encryption key available in memory');
+        setIsEncryptionReady(true);
+        setRequiresUnlock(false);
+      } else {
+        console.log('⚠️  Encryption key not available - user needs to unlock');
+        setIsEncryptionReady(false);
+        setRequiresUnlock(true);
+      }
+      
       setIsLoadingAuth(false);
     } catch (error) {
       console.error('❌ Auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setUser(null);
+      setIsEncryptionReady(false);
+      setRequiresUnlock(false);
 
       // If user auth fails, it might be an expired token
       if (error.status === 401 || error.status === 403) {
@@ -134,7 +154,10 @@ export const AuthProvider = ({ children }) => {
   const logout = async (shouldRedirect = true) => {
     try {
       // Call logout endpoint to invalidate token on backend
-      await apiClient.post('/auth/logout');
+      const refreshToken = localStorage.getItem('kawa_refresh_token');
+      if (refreshToken) {
+        await apiClient.post('/auth/logout', { refreshToken });
+      }
     } catch (error) {
       // Continue logout even if backend call fails
     }
@@ -147,6 +170,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('kawa_refresh_token');
     setUser(null);
     setIsAuthenticated(false);
+    setIsEncryptionReady(false);
+    setRequiresUnlock(false);
     setAuthError(null);
     
     // Note: React Query cache will be cleared on page reload (redirect to /login)
@@ -179,6 +204,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const unlock = async (password) => {
+    try {
+      if (!user || !user.encryptionSalt) {
+        throw new Error('User data or encryption salt not available');
+      }
+
+      console.log('🔐 AuthContext.unlock: Deriving encryption key...');
+      const { initializeEncryption } = await import('@/lib/keyManager');
+      await initializeEncryption(password, user.encryptionSalt);
+      
+      console.log('✅ AuthContext.unlock: Encryption key derived successfully');
+      setIsEncryptionReady(true);
+      setRequiresUnlock(false);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ AuthContext.unlock: Failed to derive encryption key:', error);
+      return { success: false, error };
+    }
+  };
+
   const navigateToLogin = () => {
     // Redirect to login page using app base URL
     const loginUrl = appParams.appBaseUrl
@@ -190,13 +236,16 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      isAuthenticated, 
+      isAuthenticated,
+      isEncryptionReady,
+      requiresUnlock,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
       logout,
       login,
+      unlock,
       navigateToLogin,
       checkAppState
     }}>
