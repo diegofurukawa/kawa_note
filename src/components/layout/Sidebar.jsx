@@ -31,11 +31,15 @@ import {
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { NO_FOLDER_SENTINEL } from "@/lib/constants";
-import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
+import { useFolders, useFolderHierarchy, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
 import { useNotes } from '@/api/useNotes';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/components/providers/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+import ColorPickerPopover from '@/components/folders/ColorPickerPopover';
+import IconPickerPopover from '@/components/folders/IconPickerPopover';
+import SubFolderCreateDialog from '@/components/folders/SubFolderCreateDialog';
+import { getFolderIcon } from '@/lib/folderIconHelper';
 
 /** @typedef {import('@/types/models').Folder} Folder */
 /** @typedef {import('@/types/models').Note} Note */
@@ -51,10 +55,11 @@ const colorClasses = {
 };
 
 // @ts-ignore
-function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfolders = /** @type {any[]} */ ([]), isCollapsed = false }) {
+function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfolders = /** @type {any[]} */ ([]), isCollapsed = false, allFolders = [] }) {
   const [isOpen, setIsOpen] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(folder.name);
+  const [isCreatingSubfolder, setIsCreatingSubfolder] = useState(false);
   const updateFolderMutation = useUpdateFolder();
   const deleteFolderMutation = useDeleteFolder();
 
@@ -70,7 +75,34 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
     }
   };
 
+  const handleColorChange = async (newColor) => {
+    try {
+      await updateFolderMutation.mutateAsync({
+        id: folder.id,
+        data: { color: newColor }
+      });
+      toast.success('Cor atualizada');
+    } catch (error) {
+      if (checkAndHandleEncryptionError(error)) return;
+      toast.error('Erro ao atualizar cor');
+    }
+  };
+
+  const handleIconChange = async (newIcon) => {
+    try {
+      await updateFolderMutation.mutateAsync({
+        id: folder.id,
+        data: { icon: newIcon }
+      });
+      toast.success('Ícone atualizado');
+    } catch (error) {
+      if (checkAndHandleEncryptionError(error)) return;
+      toast.error('Erro ao atualizar ícone');
+    }
+  };
+
   const notesCount = notes.filter((/** @type {Note} */ n) => n.folderId === folder.id).length;
+  const FolderIconComponent = getFolderIcon(folder.icon);
 
   if (isCollapsed) {
     return (
@@ -84,7 +116,7 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
                 selectedFolder?.id === folder.id ? "bg-indigo-100 text-indigo-900" : colorClasses[/** @type {keyof typeof colorClasses} */ (folder.color) || 'slate']
               )}
             >
-              <Folder className="w-5 h-5 shrink-0" />
+              <FolderIconComponent className="w-5 h-5 shrink-0" />
             </div>
           </TooltipTrigger>
           <TooltipContent side="right">
@@ -116,7 +148,7 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
           </button>
         )}
         
-        <Folder className="w-4 h-4 shrink-0" />
+        <FolderIconComponent className="w-4 h-4 shrink-0" />
         
         {isEditing ? (
           // @ts-ignore
@@ -165,10 +197,33 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
           {/* @ts-ignore */}
           <DropdownMenuContent align="end">
             {/* @ts-ignore */}
+            <DropdownMenuItem onClick={() => setIsCreatingSubfolder(true)}>
+              <Plus className="w-3 h-3 mr-2" />
+              Criar SubPasta
+            </DropdownMenuItem>
+            {/* @ts-ignore */}
             <DropdownMenuItem onClick={() => setIsEditing(true)}>
               <Edit2 className="w-3 h-3 mr-2" />
               Renomear
             </DropdownMenuItem>
+            {/* Separator */}
+            <div className="my-1 h-px bg-slate-200" />
+            {/* Color Picker */}
+            <div className="px-2 py-1.5">
+              <ColorPickerPopover 
+                currentColor={folder.color || 'slate'} 
+                onColorChange={handleColorChange}
+              />
+            </div>
+            {/* Icon Picker */}
+            <div className="px-2 py-1.5">
+              <IconPickerPopover 
+                currentIcon={folder.icon || 'Folder'} 
+                onIconChange={handleIconChange}
+              />
+            </div>
+            {/* Separator */}
+            <div className="my-1 h-px bg-slate-200" />
             {/* @ts-ignore */}
             <DropdownMenuItem
               onClick={() => deleteFolderMutation.mutateAsync(folder.id)}
@@ -181,6 +236,14 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
         </DropdownMenu>
       </div>
       
+      {/* SubFolder Create Dialog */}
+      <SubFolderCreateDialog
+        open={isCreatingSubfolder}
+        onOpenChange={setIsCreatingSubfolder}
+        parentFolderId={folder.id}
+        parentFolderName={folder.name}
+      />
+      
       {isOpen && subfolders.map(subfolder => (
         <FolderItem
           key={subfolder.id}
@@ -189,14 +252,25 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
           selectedFolder={selectedFolder}
           onSelect={onSelect}
           level={level + 1}
-          subfolders={subfolders.filter((/** @type {{ parentFolderId: string }} */ f) => f.parentFolderId === subfolder.id)}
+          subfolders={allFolders.filter((/** @type {{ parentFolderId: string }} */ f) => f.parentFolderId === subfolder.id)}
           isCollapsed={isCollapsed}
+          allFolders={allFolders}
         />
       ))}
     </div>
   );
 }
 
+/**
+ * Sidebar - Componente de navegação lateral com pastas e usuário
+ * @param {Object} props - Props do componente
+ * @param {Object} props.selectedFolder - Pasta selecionada atualmente
+ * @param {Function} props.onSelectFolder - Callback ao selecionar pasta
+ * @param {number} props.notesCount - Quantidade total de notas
+ * @param {boolean} props.isCollapsed - Se a sidebar está recolhida
+ * @param {Function} props.onToggleCollapse - Callback para alternar colapso
+ * @returns {JSX.Element} Sidebar com navegação de pastas
+ */
 // @ts-ignore
 export default function Sidebar({ 
   selectedFolder, 
@@ -207,8 +281,17 @@ export default function Sidebar({
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const { data: foldersResponse = { data: [] } } = useFolders();
-  const folders = foldersResponse?.data || [];
+  const { data: foldersResponse = { data: [] } } = useFolderHierarchy();
+
+  // hierarchy pode vir como árvore (com children) ou flat — achata para lista flat
+  const flattenFolders = (items, result = []) => {
+    for (const item of items) {
+      result.push(item);
+      if (item.children?.length) flattenFolders(item.children, result);
+    }
+    return result;
+  };
+  const folders = flattenFolders(foldersResponse?.data || []);
   const { data: notesResponse = { data: [] } } = useNotes();
   const notes = notesResponse?.data || [];
   const createFolderMutation = useCreateFolder();
@@ -435,6 +518,7 @@ export default function Sidebar({
               onSelect={onSelectFolder}
               subfolders={folders.filter((/** @type {{ parentFolderId: string }} */ f) => f.parentFolderId === folder.id)}
               isCollapsed={isCollapsed}
+              allFolders={folders}
             />
           ))}
         </div>

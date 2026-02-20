@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Save, X, Pin, Loader2, ExternalLink, FolderInput, Edit3, Eye } from "lucide-react";
+import { X, Pin, Loader2, ExternalLink, FolderInput, Edit3, Eye, Check } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { safeUrlTransform } from '@/lib/constants';
@@ -21,20 +21,34 @@ const typeColors = {
   word: "bg-amber-100 text-amber-700"
 };
 
+/**
+ * NoteEditor - Editor de notas com auto-save e suporte a markdown
+ * @param {Object} props - Props do componente
+ * @param {Object} props.note - Nota a ser editada
+ * @param {Function} props.onSave - Callback após salvar
+ * @param {Function} props.onClose - Callback para fechar editor
+ * @param {Array} props.allNotes - Todas as notas (para autocomplete de tags)
+ * @param {Function} props.onMoveNote - Callback para mover nota
+ * @returns {JSX.Element} Editor de notas com visualização e edição
+ */
 export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMoveNote }) {
   const [editedNote, setEditedNote] = useState(note);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
   const [error, setError] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const updateNoteMutation = useUpdateNote();
-  const hasChangesRef = useRef(false);
+  const debounceTimerRef = useRef(null);
+  const saveToastShownRef = useRef(false);
 
   useEffect(() => {
     setEditedNote(note);
-    setHasChanges(false);
-    hasChangesRef.current = false;
+    setIsDirty(false);
+    setSaveStatus('idle');
     setError(null);
     setIsEditMode(false);
+    saveToastShownRef.current = false;
   }, [note]);
 
   // Extract all unique tags from all notes for autocomplete
@@ -69,11 +83,37 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
     return suggestions;
   }, [editedNote.previewData]);
 
-  const handleSave = useCallback(async () => {
-    if (!hasChangesRef.current) return;
-    
+  // Auto-save effect com debounce
+  useEffect(() => {
+    if (!isDirty) return;
+
+    setSaveStatus('dirty');
+
+    // Limpar timer anterior
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Configurar novo timer (1500ms debounce)
+    debounceTimerRef.current = setTimeout(() => {
+      handleAutoSave();
+    }, 1500);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [isDirty, editedNote]);
+
+  const handleAutoSave = useCallback(async () => {
+    if (!isDirty) return;
+
     try {
+      setSaveStatus('saving');
+      setIsSaving(true);
       setError(null);
+
       await updateNoteMutation.mutateAsync({
         id: note.id,
         data: {
@@ -83,28 +123,49 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
           tags: editedNote.tags
         }
       });
-      setHasChanges(false);
-      hasChangesRef.current = false;
-      toast.success('Nota salva com sucesso');
-      setIsEditMode(false);
+
+      setSaveStatus('saved');
+      setIsDirty(false);
+
+      // Mostrar indicador "Salvo" por 3 segundos
+      setTimeout(() => {
+        setSaveStatus('idle');
+      }, 3000);
+
       if (onSave) onSave();
     } catch (err) {
       // Check if it's an encryption error and handle logout
       if (checkAndHandleEncryptionError(err)) {
         return;
       }
-      
+
       const errorMessage = err?.data?.error?.message || err?.message || 'Erro ao salvar nota';
       setError(errorMessage);
-      toast.error(errorMessage);
+      setSaveStatus('error');
+      
+      // Mostrar toast de erro apenas uma vez
+      if (!saveToastShownRef.current) {
+        saveToastShownRef.current = true;
+        toast.error(errorMessage);
+      }
+    } finally {
+      setIsSaving(false);
     }
-  }, [editedNote, note.id, updateNoteMutation, onSave]);
+  }, [editedNote, note.id, updateNoteMutation, isDirty, onSave]);
+
+  // Força save imediato com Ctrl+S
+  const handleForceSave = useCallback(async () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    await handleAutoSave();
+  }, [handleAutoSave]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        handleSave();
+        handleForceSave();
       }
       if (e.key === 'Escape') {
         onClose();
@@ -113,12 +174,12 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, onClose]);
+  }, [handleForceSave, onClose]);
 
   const handleChange = (field, value) => {
     setEditedNote(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
-    hasChangesRef.current = true;
+    setIsDirty(true);
+    saveToastShownRef.current = false;
   };
 
   const handleTogglePin = async () => {
@@ -156,89 +217,92 @@ export default function NoteEditor({ note, onSave, onClose, allNotes = [], onMov
     }
   }, [editedNote.previewData]);
 
+  // Render save status indicator
+  const renderSaveIndicator = () => {
+    switch (saveStatus) {
+      case 'dirty':
+        return <span className="text-xs text-amber-600 font-medium">• Não salvo</span>;
+      case 'saving':
+        return (
+          <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Salvando...
+          </span>
+        );
+      case 'saved':
+        return (
+          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+            <Check className="w-3 h-3" />
+            Salvo
+          </span>
+        );
+      case 'error':
+        return <span className="text-xs text-red-600 font-medium">• Erro ao salvar</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200">
-        <div className="flex items-center gap-3">
-          <Badge className={`${typeColors[editedNote.type]} border-0`}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <Badge className={`${typeColors[editedNote.type]} border-0 text-xs`}>
             {editedNote.type}
           </Badge>
           <span className="text-xs text-slate-400">
             {format(new Date(editedNote.createdAt), 'dd/MM/yyyy HH:mm')}
           </span>
-          {hasChanges && (
-            <span className="text-xs text-amber-600 font-medium">• Não salvo</span>
-          )}
-          {error && (
-            <span className="text-xs text-red-600 font-medium">• Erro: {error}</span>
-          )}
+          {renderSaveIndicator()}
         </div>
-        
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleTogglePin}
-            className={editedNote.pinned ? "text-amber-500" : ""}
+            className={`h-7 w-7 ${editedNote.pinned ? "text-amber-500" : ""}`}
           >
-            <Pin className={`w-4 h-4 ${editedNote.pinned ? 'fill-amber-500' : ''}`} />
+            <Pin className={`w-3.5 h-3.5 ${editedNote.pinned ? 'fill-amber-500' : ''}`} />
           </Button>
-          
+
           {onMoveNote && (
             <Button
               variant="ghost"
               size="icon"
+              className="h-7 w-7"
               onClick={() => onMoveNote(editedNote)}
               title="Mover para outra pasta"
             >
-              <FolderInput className="w-4 h-4" />
+              <FolderInput className="w-3.5 h-3.5" />
             </Button>
           )}
-          
+
           <Button
             variant={isEditMode ? "secondary" : "outline"}
             size="sm"
+            className="h-7 px-2 text-xs"
             onClick={() => setIsEditMode(!isEditMode)}
           >
-            {isEditMode ? <Eye className="w-4 h-4 mr-1" /> : <Edit3 className="w-4 h-4 mr-1" />}
+            {isEditMode ? <Eye className="w-3.5 h-3.5 mr-1" /> : <Edit3 className="w-3.5 h-3.5 mr-1" />}
             {isEditMode ? 'Visualizar' : 'Editar'}
           </Button>
-          
-          {hasChanges && (
-            <Button
-              onClick={handleSave}
-              disabled={updateNoteMutation.isPending}
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700"
-            >
-              {updateNoteMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar
-                </>
-              )}
-            </Button>
-          )}
-          
+
           <Button
             variant="ghost"
             size="icon"
+            className="h-7 w-7"
             onClick={onClose}
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="space-y-4">
           <Input
             value={editedNote.title}
             onChange={(e) => handleChange('title', e.target.value)}

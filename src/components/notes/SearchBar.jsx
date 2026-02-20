@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, X, SlidersHorizontal, Globe } from "lucide-react";
+import { Search, X, SlidersHorizontal, Globe, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -10,8 +10,11 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useSearchIndex } from '@/hooks/useSearchIndex';
+import { useNotes } from '@/api/useNotes';
+import { format } from 'date-fns';
 
-export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChange, searchScope = 'folder' }) {
+export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChange, searchScope = 'folder', onSelectResult }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     text: true,
@@ -20,10 +23,54 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
     word: true,
     pinnedOnly: false
   });
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('searchHistory') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const { data: notesResponse = { data: [] } } = useNotes();
+  const notes = notesResponse?.data || [];
+  
+  // Usar hook de busca
+  const { search, isIndexing, indexedCount } = useSearchIndex(notes, []);
+
+  // Filtrar resultados de busca
+  const searchResults = useMemo(() => {
+    if (!searchTerm) return [];
+
+    const results = search(searchTerm, 10);
+    
+    return results.filter(note => {
+      if (!filters[note.type]) return false;
+      if (filters.pinnedOnly && !note.pinned) return false;
+      return true;
+    });
+  }, [searchTerm, search, filters]);
 
   const handleSearch = (value) => {
     setSearchTerm(value);
     if (onSearch) onSearch(value);
+    setIsSearchOpen(!!value);
+  };
+
+  const handleSelectResult = (note) => {
+    // Adicionar ao histórico
+    const newHistory = [searchTerm, ...searchHistory.filter(h => h !== searchTerm)].slice(0, 5);
+    setSearchHistory(newHistory);
+    sessionStorage.setItem('searchHistory', JSON.stringify(newHistory));
+
+    // Callback
+    if (onSelectResult) {
+      onSelectResult(note);
+    }
+
+    // Limpar busca
+    setSearchTerm('');
+    setIsSearchOpen(false);
   };
 
   const handleFilterToggle = (key) => {
@@ -35,6 +82,7 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
   const clearSearch = () => {
     setSearchTerm('');
     if (onSearch) onSearch('');
+    setIsSearchOpen(false);
   };
 
   const activeFiltersCount = Object.entries(filters)
@@ -48,6 +96,7 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
         <Input
           value={searchTerm}
           onChange={(e) => handleSearch(e.target.value)}
+          onFocus={() => setIsSearchOpen(true)}
           placeholder="Buscar notas, contextos, relações..."
           className="pl-10 pr-10 bg-white border-slate-200"
         />
@@ -60,6 +109,122 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
           >
             <X className="w-4 h-4" />
           </Button>
+        )}
+
+        {/* Search Results Dropdown */}
+        {isSearchOpen && (searchTerm || searchHistory.length > 0) && (
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
+            {isIndexing && (
+              <div className="p-3 flex items-center gap-2 text-sm text-slate-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Indexando {indexedCount} notas...
+              </div>
+            )}
+
+            {searchTerm ? (
+              <>
+                {searchResults.length > 0 ? (
+                  <div className="max-h-96 overflow-y-auto">
+                    {/* Resultados diretos */}
+                    {searchResults.filter(r => !r.isRelated).length > 0 && (
+                      <div>
+                        <div className="px-3 py-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Resultados
+                        </div>
+                        {searchResults
+                          .filter(r => !r.isRelated)
+                          .map(note => (
+                            <button
+                              key={note.id}
+                              onClick={() => handleSelectResult(note)}
+                              className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-900 truncate">
+                                    {note.title}
+                                  </p>
+                                  <p className="text-xs text-slate-500 truncate">
+                                    {note.content?.substring(0, 80)}...
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                      {note.type}
+                                    </span>
+                                    <span className="text-xs text-slate-400">
+                                      {format(new Date(note.createdAt), 'dd/MM')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Notas relacionadas */}
+                    {searchResults.filter(r => r.isRelated).length > 0 && (
+                      <div>
+                        <div className="px-3 py-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Relacionadas
+                        </div>
+                        {searchResults
+                          .filter(r => r.isRelated)
+                          .map(note => (
+                            <button
+                              key={note.id}
+                              onClick={() => handleSelectResult(note)}
+                              className="w-full text-left px-3 py-2 hover:bg-amber-50 transition-colors border-b border-slate-100 last:border-b-0"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-900 truncate">
+                                    {note.title}
+                                  </p>
+                                  <p className="text-xs text-slate-500 truncate">
+                                    {note.content?.substring(0, 80)}...
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                                      Relacionada
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-sm text-slate-500">
+                    Nenhuma nota encontrada
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {searchHistory.length > 0 && (
+                  <div className="p-3 border-b border-slate-200">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                      Buscas recentes
+                    </p>
+                    <div className="space-y-1">
+                      {searchHistory.map((term, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSearch(term)}
+                          className="w-full text-left px-2 py-1 text-sm text-slate-600 hover:bg-slate-50 rounded transition-colors"
+                        >
+                          {term}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
       

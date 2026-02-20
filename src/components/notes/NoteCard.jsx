@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import {
   Trash2,
   ExternalLink,
   FolderInput,
-  Folder
+  Folder,
+  ChevronDown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ import {
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { useUpdateNote, useDeleteNote } from '@/api/useNotes';
+import NoteEditor from './NoteEditor';
 
 const typeIcons = {
   text: Type,
@@ -42,6 +44,7 @@ const typeColors = {
 };
 
 export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = false, onMoveNote }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const updateNoteMutation = useUpdateNote();
   const deleteNoteMutation = useDeleteNote();
   const Icon = typeIcons[note.type] || Type;
@@ -67,6 +70,30 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
     }
   };
 
+  const handleCloseEditor = () => {
+    setIsExpanded(false);
+  };
+
+  if (isExpanded) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        layout
+      >
+        <Card className="p-0 border-slate-200 bg-white overflow-hidden">
+          <NoteEditor
+            note={note}
+            onSave={onUpdate}
+            onClose={handleCloseEditor}
+            onMoveNote={onMoveNote}
+          />
+        </Card>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -74,7 +101,10 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
       exit={{ opacity: 0, scale: 0.95 }}
       layout
     >
-      <Card className="p-4 hover:shadow-md transition-all border-slate-200 bg-white relative group">
+      <Card 
+        className="p-4 hover:shadow-md transition-all border-slate-200 bg-white relative group cursor-pointer"
+        onClick={() => setIsExpanded(true)}
+      >
         {note.pinned && (
           <div className="absolute top-2 left-2">
             <Pin className="w-4 h-4 text-amber-500 fill-amber-500" />
@@ -133,16 +163,14 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
               </div>
             )}
             
-            {useMemo(() => (
-              <div className="text-sm text-slate-600 line-clamp-3 prose prose-sm max-w-none">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  urlTransform={safeUrlTransform}
-                >
-                  {note.content}
-                </ReactMarkdown>
-              </div>
-            ), [note.content])}
+            <div className="text-sm text-slate-600 line-clamp-3 prose prose-sm max-w-none">
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                urlTransform={safeUrlTransform}
+              >
+                {note.content}
+              </ReactMarkdown>
+            </div>
             
             {note.context && (
               <div className="mt-3 p-2 bg-indigo-50 border border-indigo-100 rounded-lg">
@@ -157,37 +185,52 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
             </div>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleTogglePin}>
-                <Pin className="w-4 h-4 mr-2" />
-                {note.pinned ? 'Desafixar' : 'Fixar'}
-              </DropdownMenuItem>
-              {onMoveNote && (
-                <DropdownMenuItem onClick={() => onMoveNote(note)}>
-                  <FolderInput className="w-4 h-4 mr-2" />
-                  Mover para...
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(true);
+              }}
+              title="Expandir para editar"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleTogglePin}>
+                  <Pin className="w-4 h-4 mr-2" />
+                  {note.pinned ? 'Desafixar' : 'Fixar'}
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onClick={handleDelete}
-                disabled={deleteNoteMutation.isPending}
-                className="text-red-600"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                {deleteNoteMutation.isPending ? 'Deletando...' : 'Deletar'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {onMoveNote && (
+                  <DropdownMenuItem onClick={() => onMoveNote(note)}>
+                    <FolderInput className="w-4 h-4 mr-2" />
+                    Mover para...
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={handleDelete}
+                  disabled={deleteNoteMutation.isPending}
+                  className="text-red-600"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {deleteNoteMutation.isPending ? 'Deletando...' : 'Deletar'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </Card>
     </motion.div>

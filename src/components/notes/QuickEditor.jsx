@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useCreateNote } from '@/api/useNotes';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
 
-export default function QuickEditor({ onNoteSaved, folderId = null }) {
+export default function QuickEditor({ onNoteSaved, folderId = null, fullHeight = false }) {
   const [content, setContent] = useState('');
   const [type, setType] = useState('text');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -103,9 +103,9 @@ export default function QuickEditor({ onNoteSaved, folderId = null }) {
     <motion.div
       className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"
       initial={false}
-      animate={{ height: isExpanded ? 'auto' : '64px' }}
+      animate={{ height: isExpanded ? 'auto' : '56px' }}
     >
-      <div className="p-4">
+      <div className="p-5">
         <div className="flex items-start gap-3">
           <Textarea
             value={content}
@@ -113,8 +113,9 @@ export default function QuickEditor({ onNoteSaved, folderId = null }) {
             onFocus={() => setIsExpanded(true)}
             onKeyDown={handleKeyDown}
             placeholder="Escreva, cole um link, ou adicione uma ideia..."
-            className="min-h-[32px] resize-none border-0 focus-visible:ring-0 text-[15px] placeholder:text-slate-400"
-            rows={isExpanded ? 4 : 1}
+            className="min-h-[32px] resize-none border-0 focus-visible:ring-0 text-base placeholder:text-slate-400 leading-relaxed"
+            style={{ minHeight: isExpanded && fullHeight ? '420px' : undefined }}
+            rows={isExpanded ? (fullHeight ? 18 : 5) : 1}
           />
         </div>
         

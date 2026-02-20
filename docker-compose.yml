@@ -72,6 +72,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
+      args:
+        VITE_APP_NAME: ${VITE_APP_NAME:-KawaMyCenter}
+        VITE_KAWA_APP_ID: ${VITE_KAWA_APP_ID:-test-app}
+        VITE_KAWA_FUNCTIONS_VERSION: ${VITE_KAWA_FUNCTIONS_VERSION:-v1}
+        VITE_KAWA_APP_BASE_URL: ${VITE_KAWA_APP_BASE_URL:-http://localhost:3116}
     container_name: kawa_note-app
     restart: unless-stopped
     networks:
@@ -81,7 +86,6 @@ services:
       - "${FRONTEND_PORT}:80"
     environment:
       - NODE_ENV=production
-      - VITE_APP_NAME=${VITE_APP_NAME:-KawaMyCenter}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s

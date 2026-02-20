@@ -10,7 +10,7 @@ import { useNotes } from '@/api/useNotes';
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatePresence } from "framer-motion";
 import { Brain, Sparkles, ChevronLeft, ChevronRight, Lock } from "lucide-react";
-import { useFolders } from '@/api/useFolders';
+import { useFolderHierarchy } from '@/api/useFolders';
 import { Button } from "@/components/ui/button";
 import { needsMigration, migrateAllNotes, getMigrationStatusMessage } from '@/lib/noteMigration';
 import { isKeyAvailable } from '@/lib/keyManager';
@@ -101,8 +101,15 @@ export default function Home() {
   }, [notes.length, migrationStatus, refetch]);
 
   // Folders para navegação < >
-  const { data: foldersResponse = { data: [] } } = useFolders();
-  const folders = foldersResponse?.data || [];
+  const { data: foldersResponse = { data: [] } } = useFolderHierarchy();
+  const flattenFolders = (items, result = []) => {
+    for (const item of items) {
+      result.push(item);
+      if (item.children?.length) flattenFolders(item.children, result);
+    }
+    return result;
+  };
+  const folders = flattenFolders(foldersResponse?.data || []);
   const rootFolders = folders.filter((/** @type {Folder} */ f) => !f.parentFolderId);
 
   // Lista navegável: [null (Todas), NO_FOLDER_SENTINEL (Sem Pasta), ...pastas ordenadas]
@@ -360,66 +367,67 @@ export default function Home() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header - Always visible */}
         <div className="border-b border-slate-200 bg-white">
-          <div className="px-6 py-6">
-            {/* Migration Status Banner */}
-            {migrationStatus === 'running' && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
-                <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900">
-                    Encriptando suas notas...
-                  </p>
-                  <p className="text-xs text-blue-700">
-                    {migrationProgress.current} de {migrationProgress.total} notas processadas
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                {navList.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    onClick={navigatePrev}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                )}
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900">
-                    {isGlobalSearch ? 'Pesquisa em Todas as Notas' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
-                  </h1>
-                  <p className="text-sm text-slate-500 mt-1">
-                    {folderNoteCount} {folderNoteCount === 1 ? 'nota' : 'notas'}
-                  </p>
-                </div>
-                {navList.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    onClick={navigateNext}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Sparkles className="w-4 h-4" />
-                <span>{notes.length} total</span>
+          {/* Migration Status Banner */}
+          {migrationStatus === 'running' && (
+            <div className="mx-6 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+              <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900">
+                  Encriptando suas notas...
+                </p>
+                <p className="text-xs text-blue-700">
+                  {migrationProgress.current} de {migrationProgress.total} notas processadas
+                </p>
               </div>
             </div>
-            
-            <SearchBar
-              onSearch={setSearchTerm}
-              onFilterChange={setFilters}
-              onSearchScopeChange={setSearchScope}
-              searchScope={searchScope}
-            />
+          )}
+
+          {/* Título + SearchBar na mesma linha */}
+          <div className="flex items-center gap-3 px-6 py-3">
+            {navList.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={navigatePrev}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            )}
+            <div className="shrink-0">
+              <h1 className="text-xl font-bold text-slate-900 leading-tight">
+                {isGlobalSearch ? 'Pesquisa Global' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {folderNoteCount} {folderNoteCount === 1 ? 'nota' : 'notas'}
+              </p>
+            </div>
+            {navList.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={navigateNext}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            )}
+
+            {/* SearchBar inline */}
+            <div className="flex-1">
+              <SearchBar
+                onSearch={setSearchTerm}
+                onFilterChange={setFilters}
+                onSearchScopeChange={setSearchScope}
+                searchScope={searchScope}
+                onSelectResult={(note) => openNoteInTab(note)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-slate-500 shrink-0">
+              <Sparkles className="w-4 h-4" />
+              <span>{notes.length} total</span>
+            </div>
           </div>
         </div>
 
@@ -438,13 +446,12 @@ export default function Home() {
         <div className="flex-1 overflow-hidden flex flex-col">
           {activeTab ? (
             activeTab.type === 'quickEditor' ? (
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-3xl mx-auto">
-                  <QuickEditor 
-                    onNoteSaved={handleNoteSaved} 
-                    folderId={selectedFolder?.id || null}
-                  />
-                </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <QuickEditor
+                  onNoteSaved={handleNoteSaved}
+                  folderId={selectedFolder?.id || null}
+                  fullHeight
+                />
               </div>
             ) : (
               <NoteEditor

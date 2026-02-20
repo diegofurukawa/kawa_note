@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/components/providers/AuthContext';
 import { StepIdentificationComponent } from '@/components/onboarding/StepIdentificationComponent';
 import { StepUserCredentialsComponent } from '@/components/onboarding/StepUserCredentialsComponent';
 import { StepPlanSelectionComponent } from '@/components/onboarding/StepPlanSelectionComponent';

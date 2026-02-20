@@ -3,6 +3,7 @@ import pluginJs from "@eslint/js";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginUnusedImports from "eslint-plugin-unused-imports";
+import pluginImport from "eslint-plugin-import";
 
 export default [
   {
@@ -10,6 +11,8 @@ export default [
       "src/components/**/*.{js,mjs,cjs,jsx}",
       "src/pages/**/*.{js,mjs,cjs,jsx}",
       "src/Layout.jsx",
+      "src/main.jsx",
+      "src/App.jsx",
     ],
     ignores: ["src/lib/**/*"],
     ...pluginJs.configs.recommended,
@@ -28,11 +31,18 @@ export default [
       react: {
         version: "detect",
       },
+      "import/resolver": {
+        alias: {
+          map: [["@", "./src"]],
+          extensions: [".js", ".jsx", ".json"],
+        },
+      },
     },
     plugins: {
       react: pluginReact,
       "react-hooks": pluginReactHooks,
       "unused-imports": pluginUnusedImports,
+      import: pluginImport,
     },
     rules: {
       "no-unused-vars": "off",
@@ -55,6 +65,7 @@ export default [
         { ignore: ["cmdk-input-wrapper", "toast-close"] },
       ],
       "react-hooks/rules-of-hooks": "error",
+      "import/no-unresolved": "error",
     },
   },
 ];

@@ -32,6 +32,18 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy source code
 COPY . .
 
+# Accept build arguments for environment variables
+ARG VITE_APP_NAME=KawaMyCenter
+ARG VITE_KAWA_APP_ID=test-app
+ARG VITE_KAWA_FUNCTIONS_VERSION=v1
+ARG VITE_KAWA_APP_BASE_URL=http://localhost:3116
+
+# Set environment variables for build
+ENV VITE_APP_NAME=${VITE_APP_NAME}
+ENV VITE_KAWA_APP_ID=${VITE_KAWA_APP_ID}
+ENV VITE_KAWA_FUNCTIONS_VERSION=${VITE_KAWA_FUNCTIONS_VERSION}
+ENV VITE_KAWA_APP_BASE_URL=${VITE_KAWA_APP_BASE_URL}
+
 # Build the application
 RUN npm run build
 

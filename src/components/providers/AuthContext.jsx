@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { appParams, setAppToken } from '@/lib/app-params';
-import { apiClient, authApi } from '@/api/client';
+import { apiClient } from '@/api/client';
 import { resetEncryptionLogoutFlag } from '@/api/useNotes';
 import { clearKey } from '@/lib/keyManager';
 

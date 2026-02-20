@@ -16,6 +16,14 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["src/components/**/*.js", "src/components/**/*.jsx", "src/pages/**/*.jsx", "src/Layout.jsx"],
-  "exclude": ["node_modules", "dist", "src/vite-plugins", "src/api", "src/lib"]
+  "include": [
+    "src/components/**/*.js",
+    "src/components/**/*.jsx",
+    "src/pages/**/*.jsx",
+    "src/Layout.jsx",
+    "src/lib/**/*.js",
+    "src/lib/**/*.jsx",
+    "src/api/**/*.js"
+  ],
+  "exclude": ["node_modules", "dist", "src/vite-plugins"]
 } 
