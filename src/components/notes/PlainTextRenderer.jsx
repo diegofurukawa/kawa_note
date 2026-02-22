@@ -79,7 +79,7 @@ export default function PlainTextRenderer({ content, onCheckboxToggle }) {
   const lines = content.split('\n');
 
   return (
-    <div className="font-mono text-base leading-relaxed text-slate-700 break-words whitespace-pre-wrap">
+    <div className="font-mono text-sm leading-relaxed text-slate-700 break-words whitespace-pre-wrap">
       {lines.map((line, lineIndex) => {
         const key = `line-${lineIndex}`;
 

@@ -103,7 +103,20 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
     }
   };
 
-  const notesCount = notes.filter((/** @type {Note} */ n) => n.folderId === folder.id).length;
+  // Collect this folder's ID plus all descendant IDs to count notes recursively
+  const collectDescendantIds = (folderId, allFolderList) => {
+    const ids = new Set([folderId]);
+    const queue = [folderId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      allFolderList
+        .filter(f => f.parentFolderId === current)
+        .forEach(f => { ids.add(f.id); queue.push(f.id); });
+    }
+    return ids;
+  };
+  const descendantIds = collectDescendantIds(folder.id, allFolders);
+  const notesCount = notes.filter((/** @type {Note} */ n) => descendantIds.has(n.folderId)).length;
   const FolderIconComponent = getFolderIcon(folder.icon);
 
   if (isCollapsed) {

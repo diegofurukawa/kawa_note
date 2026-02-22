@@ -452,7 +452,7 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
           <Input
             value={editedNote.title}
             onChange={(e) => handleChange('title', e.target.value)}
-            className="text-2xl font-bold border-0 px-0 focus-visible:ring-0"
+            className="text-xl font-bold border-0 px-0 focus-visible:ring-0"
             placeholder="Título da nota..."
           />
 
@@ -497,7 +497,7 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
             value={editedNote.content}
             onChange={(e) => handleChange('content', e.target.value)}
             onKeyDown={handleTextareaKeyDown}
-            className="flex-1 mt-4 min-h-[200px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700"
+            className="flex-1 mt-4 min-h-[200px] border-0 px-0 text-sm leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700"
             placeholder="Escreva em Markdown... (- [ ] para criar to-do)"
             autoFocus
           />
@@ -523,7 +523,7 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
                 }}
               />
             ) : (
-              <p className="text-slate-400 font-mono text-base">
+              <p className="text-slate-400 font-mono text-sm">
                 {mode === 'panel' ? 'Clique em Editar para começar...' : 'Clique duplo para editar...'}
               </p>
             )}

@@ -90,8 +90,9 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
     .length;
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative flex-1">
+    <div className="flex flex-col gap-2">
+      {/* Linha 1: Campo de pesquisa */}
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <Input
           value={searchTerm}
@@ -227,72 +228,75 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
           </div>
         )}
       </div>
-      
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "relative",
-          searchScope === 'global' && "bg-indigo-100 border-indigo-300 text-indigo-700"
-        )}
-        onClick={() => {
-          const newScope = searchScope === 'folder' ? 'global' : 'folder';
-          if (onSearchScopeChange) onSearchScopeChange(newScope);
-        }}
-        title={searchScope === 'global' ? 'Pesquisando em todas as pastas' : 'Pesquisar em todas as pastas'}
-      >
-        <Globe className="w-4 h-4" />
-      </Button>
 
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="icon" className="relative">
-            <SlidersHorizontal className="w-4 h-4" />
-            {activeFiltersCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-56" align="end">
-          <div className="space-y-3">
-            <h4 className="font-medium text-sm text-slate-900">Tipos de nota</h4>
-            <div className="space-y-2">
-              {[
-                { key: 'text', label: 'Texto' },
-                { key: 'url', label: 'Links' },
-                { key: 'image', label: 'Imagens' },
-                { key: 'word', label: 'Palavras' }
-              ].map(({ key, label }) => (
-                <div key={key} className="flex items-center space-x-2">
+      {/* Linha 2: Botões */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn(
+            "relative",
+            searchScope === 'global' && "bg-indigo-100 border-indigo-300 text-indigo-700"
+          )}
+          onClick={() => {
+            const newScope = searchScope === 'folder' ? 'global' : 'folder';
+            if (onSearchScopeChange) onSearchScopeChange(newScope);
+          }}
+          title={searchScope === 'global' ? 'Pesquisando em todas as pastas' : 'Pesquisar em todas as pastas'}
+        >
+          <Globe className="w-4 h-4" />
+        </Button>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="icon" className="relative">
+              <SlidersHorizontal className="w-4 h-4" />
+              {activeFiltersCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56" align="end">
+            <div className="space-y-3">
+              <h4 className="font-medium text-sm text-slate-900">Tipos de nota</h4>
+              <div className="space-y-2">
+                {[
+                  { key: 'text', label: 'Texto' },
+                  { key: 'url', label: 'Links' },
+                  { key: 'image', label: 'Imagens' },
+                  { key: 'word', label: 'Palavras' }
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={key}
+                      checked={filters[key]}
+                      onCheckedChange={() => handleFilterToggle(key)}
+                    />
+                    <Label htmlFor={key} className="text-sm cursor-pointer">
+                      {label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <div className="flex items-center space-x-2">
                   <Checkbox
-                    id={key}
-                    checked={filters[key]}
-                    onCheckedChange={() => handleFilterToggle(key)}
+                    id="pinnedOnly"
+                    checked={filters.pinnedOnly}
+                    onCheckedChange={() => handleFilterToggle('pinnedOnly')}
                   />
-                  <Label htmlFor={key} className="text-sm cursor-pointer">
-                    {label}
+                  <Label htmlFor="pinnedOnly" className="text-sm cursor-pointer">
+                    Apenas fixadas
                   </Label>
                 </div>
-              ))}
-            </div>
-            
-            <div className="pt-2 border-t border-slate-200">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="pinnedOnly"
-                  checked={filters.pinnedOnly}
-                  onCheckedChange={() => handleFilterToggle('pinnedOnly')}
-                />
-                <Label htmlFor="pinnedOnly" className="text-sm cursor-pointer">
-                  Apenas fixadas
-                </Label>
               </div>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   );
 }

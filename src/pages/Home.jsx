@@ -126,6 +126,19 @@ export default function Home() {
   const folders = flattenFolders(foldersResponse?.data || []);
   const rootFolders = folders.filter((/** @type {Folder} */ f) => !f.parentFolderId);
 
+  /** Collect the given folder ID plus all descendant IDs (recursive via children) */
+  const collectDescendantIds = (folderId, allFolders) => {
+    const ids = new Set([folderId]);
+    const queue = [folderId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      allFolders
+        .filter(f => f.parentFolderId === current)
+        .forEach(f => { ids.add(f.id); queue.push(f.id); });
+    }
+    return ids;
+  };
+
   const navList = [null, NO_FOLDER_SENTINEL, ...rootFolders.sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))];
   const currentNavIndex = navList.findIndex(item =>
     item === null ? selectedFolder === null : (item?.virtual ? selectedFolder?.virtual : item?.id === selectedFolder?.id)
@@ -144,13 +157,18 @@ export default function Home() {
   // ─── Filtering logic ──────────────────────────────────────────────────────
   const isGlobalSearch = searchScope === 'global' && searchTerm;
 
+  // When a real folder is selected, include notes from all descendant subfolders
+  const selectedFolderIds = selectedFolder && !selectedFolder.virtual
+    ? collectDescendantIds(selectedFolder.id, folders)
+    : null;
+
   const filteredNotes = notes.filter((/** @type {Note} */ note) => {
     if (!isGlobalSearch) {
       if (selectedFolder) {
         if (selectedFolder.virtual) {
           if (note.folderId) return false;
         } else {
-          if (note.folderId !== selectedFolder.id) return false;
+          if (!selectedFolderIds.has(note.folderId)) return false;
         }
       }
     }
@@ -171,7 +189,7 @@ export default function Home() {
   const folderNoteCount = selectedFolder
     ? selectedFolder.virtual
       ? notes.filter(n => !n.folderId).length
-      : notes.filter(n => n.folderId === selectedFolder.id).length
+      : notes.filter(n => selectedFolderIds.has(n.folderId)).length
     : notes.length;
 
   // ─── Active note lifecycle management ────────────────────────────────────
@@ -425,7 +443,7 @@ export default function Home() {
                       <div className="flex-1 overflow-y-auto px-6 py-4">
                         <QuickEditor
                           onNoteSaved={handleNoteSaved}
-                          folderId={selectedFolder?.id || null}
+                          folderId={selectedFolder?.virtual ? null : (selectedFolder?.id || null)}
                           fullHeight
                         />
                       </div>
@@ -512,7 +530,7 @@ export default function Home() {
                         <div className="flex-1 overflow-y-auto px-4 py-4">
                           <QuickEditor
                             onNoteSaved={handleNoteSaved}
-                            folderId={selectedFolder?.id || null}
+                            folderId={selectedFolder?.virtual ? null : (selectedFolder?.id || null)}
                             fullHeight
                           />
                         </div>

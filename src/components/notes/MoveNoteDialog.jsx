@@ -8,7 +8,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Folder, FileX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useFolders } from '@/api/useFolders';
+import { useFolderHierarchy } from '@/api/useFolders';
 import { useUpdateNote } from '@/api/useNotes';
 import { toast } from 'sonner';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
@@ -23,10 +23,20 @@ const folderColorClasses = {
   pink: "text-pink-600"
 };
 
+/** Flatten the hierarchy tree into [{folder, depth}] preserving order */
+function flattenTree(nodes, depth = 0, result = []) {
+  for (const node of nodes) {
+    result.push({ folder: node, depth });
+    if (node.children?.length) {
+      flattenTree(node.children, depth + 1, result);
+    }
+  }
+  return result;
+}
+
 export default function MoveNoteDialog({ note, open, onOpenChange, onMoved }) {
-  const { data: foldersResponse = { data: [] } } = useFolders();
-  const folders = foldersResponse?.data || [];
-  const rootFolders = folders.filter(f => !f.parentFolderId);
+  const { data: foldersResponse = { data: [] } } = useFolderHierarchy();
+  const flatFolders = flattenTree(foldersResponse?.data || []);
   const updateNoteMutation = useUpdateNote();
 
   const handleMove = async (targetFolderId) => {
@@ -35,8 +45,8 @@ export default function MoveNoteDialog({ note, open, onOpenChange, onMoved }) {
         id: note.id,
         data: { folderId: targetFolderId }
       });
-      const targetFolder = folders.find(f => f.id === targetFolderId);
-      const folderName = targetFolder ? targetFolder.name : 'Sem pasta';
+      const entry = flatFolders.find(e => e.folder.id === targetFolderId);
+      const folderName = entry ? entry.folder.name : 'Sem pasta';
       toast.success(`Nota movida para "${folderName}"`);
       onOpenChange(false);
       if (onMoved) onMoved();
@@ -45,7 +55,7 @@ export default function MoveNoteDialog({ note, open, onOpenChange, onMoved }) {
       if (checkAndHandleEncryptionError(error)) {
         return;
       }
-      
+
       const errorMessage = error?.data?.error?.message || error?.message || 'Erro ao mover nota';
       toast.error(errorMessage);
     }
@@ -83,33 +93,32 @@ export default function MoveNoteDialog({ note, open, onOpenChange, onMoved }) {
               )}
             </button>
 
-            {/* Lista de pastas */}
-            {rootFolders
-              .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))
-              .map(folder => {
-                const isCurrent = currentFolderId === folder.id;
-                const colorClass = folderColorClasses[folder.color] || folderColorClasses.slate;
+            {/* Lista completa de pastas (raiz + subpastas) com indentação por nível */}
+            {flatFolders.map(({ folder, depth }) => {
+              const isCurrent = currentFolderId === folder.id;
+              const colorClass = folderColorClasses[folder.color] || folderColorClasses.slate;
 
-                return (
-                  <button
-                    key={folder.id}
-                    onClick={() => handleMove(folder.id)}
-                    disabled={isCurrent || updateNoteMutation.isPending}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left",
-                      isCurrent
-                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        : "hover:bg-slate-100 text-slate-700 cursor-pointer"
-                    )}
-                  >
-                    <Folder className={cn("w-4 h-4 shrink-0", colorClass)} />
-                    <span className="flex-1">{folder.name}</span>
-                    {isCurrent && (
-                      <span className="text-xs text-slate-400">(atual)</span>
-                    )}
-                  </button>
-                );
-              })}
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => handleMove(folder.id)}
+                  disabled={isCurrent || updateNoteMutation.isPending}
+                  style={{ paddingLeft: `${12 + depth * 16}px` }}
+                  className={cn(
+                    "w-full flex items-center gap-3 pr-3 py-2.5 rounded-lg text-sm transition-colors text-left",
+                    isCurrent
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                      : "hover:bg-slate-100 text-slate-700 cursor-pointer"
+                  )}
+                >
+                  <Folder className={cn("w-4 h-4 shrink-0", colorClass)} />
+                  <span className="flex-1 truncate">{folder.name}</span>
+                  {isCurrent && (
+                    <span className="text-xs text-slate-400 shrink-0">(atual)</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </ScrollArea>
       </DialogContent>
