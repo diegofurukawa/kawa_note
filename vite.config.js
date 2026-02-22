@@ -113,6 +113,7 @@ export default defineConfig(({ command, mode }) => {
       'import.meta.env.VITE_KAWA_APP_ID': JSON.stringify(rootEnv.VITE_KAWA_APP_ID || 'test-app'),
       'import.meta.env.VITE_KAWA_FUNCTIONS_VERSION': JSON.stringify(rootEnv.VITE_KAWA_FUNCTIONS_VERSION || 'v1'),
       'import.meta.env.VITE_KAWA_APP_BASE_URL': JSON.stringify(rootEnv.VITE_KAWA_APP_BASE_URL || 'http://localhost:3116'),
+      'import.meta.env.VITE_CEP_API_URL': JSON.stringify(rootEnv.VITE_CEP_API_URL || ''),
     },
     server: {
       port: 3116,

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { CepInput } from '@/components/ui/masked';
+import { Search, Loader2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -10,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
 
 const BRAZILIAN_STATES = [
   { code: 'AC', name: 'Acre' },
@@ -41,9 +42,11 @@ const BRAZILIAN_STATES = [
   { code: 'TO', name: 'Tocantins' }
 ];
 
+const CEP_API_URL = import.meta.env.VITE_CEP_API_URL?.startsWith('http') ? import.meta.env.VITE_CEP_API_URL : null;
+
 /**
  * AddressForm Component
- * Form for address information with ViaCEP integration
+ * Formulário de endereço com busca de CEP via API própria
  */
 export function AddressForm() {
   const { register, control, formState: { errors }, watch, setValue } = useFormContext();
@@ -53,36 +56,58 @@ export function AddressForm() {
   const [cepError, setCepError] = useState(null);
 
   /**
-   * Busca endereço via ViaCEP quando CEP é preenchido
+   * Busca endereço via API própria quando CEP é preenchido
    * @requires CEP com 8 dígitos numéricos (sem máscara)
    */
   const fetchAddressFromCep = async (cep) => {
-    if (!cep) return;
-
-    // CEP já vem limpo do CepInput (unmask=true)
-    const cleanCep = cep;
-    if (!/^\d{8}$/.test(cleanCep)) {
-      console.warn('CEP format invalid after unmask:', cleanCep);
-      return;
-    }
+    const cleanCep = (cep || '').replace(/\D/g, '');
+    if (!/^\d{8}$/.test(cleanCep)) return;
 
     setLoadingCep(true);
     setCepError(null);
 
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+    const tryFetch = async (url, mapFn) => {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return null;
       const data = await response.json();
+      return mapFn(data);
+    };
 
-      if (data.erro) {
+    try {
+      let address = null;
+
+      if (CEP_API_URL) {
+        address = await tryFetch(`${CEP_API_URL}/${cleanCep}`, (data) => ({
+          street: data.addressLine || '',
+          district: data.district || '',
+          city: data.city || '',
+          state: data.stateCode || '',
+        }));
+      }
+
+      if (!address) {
+        address = await tryFetch(`https://viacep.com.br/ws/${cleanCep}/json/`, (data) => {
+          if (data.erro) return null;
+          return {
+            street: data.logradouro || '',
+            district: data.bairro || '',
+            city: data.localidade || '',
+            state: data.uf || '',
+          };
+        });
+      }
+
+      if (!address) {
         setCepError('CEP não encontrado');
         return;
       }
 
-      // Map ViaCEP response to form fields
-      setValue('street', data.logradouro || '');
-      setValue('district', data.bairro || '');
-      setValue('city', data.localidade || '');
-      setValue('state', data.uf || '');
+      setValue('street', address.street);
+      setValue('district', address.district);
+      setValue('city', address.city);
+      setValue('state', address.state);
     } catch (error) {
       console.error('Error fetching CEP:', error);
       setCepError('Erro ao buscar CEP');
@@ -91,32 +116,43 @@ export function AddressForm() {
     }
   };
 
-  // Watch zipCode changes and fetch address when complete
-  useEffect(() => {
-    if (zipCodeValue && zipCodeValue.length === 8) {
-      fetchAddressFromCep(zipCodeValue);
-    }
-  }, [zipCodeValue]);
+  const handleSearchCep = () => {
+    fetchAddressFromCep(zipCodeValue);
+  };
 
   return (
     <div className="space-y-4">
-      {/* Linha 1: CEP + RUA */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="relative md:col-span-1">
-          <CepInput
-            name="zipCode"
-            control={control}
-            error={errors.zipCode}
-          />
-          {loadingCep && (
-            <Loader2 className="absolute right-3 top-8 w-4 h-4 animate-spin text-slate-400" />
-          )}
+      {/* Linha 1: CEP + BOTÃO BUSCA + RUA */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+        <div className="md:col-span-1 space-y-2">
+          <Label htmlFor="zipCode">CEP</Label>
+          <div className="flex gap-2">
+            <CepInput
+              name="zipCode"
+              control={control}
+              error={errors.zipCode}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleSearchCep}
+              disabled={loadingCep || !zipCodeValue || zipCodeValue.replace(/\D/g, '').length !== 8}
+              className="shrink-0"
+              aria-label="Buscar CEP"
+            >
+              {loadingCep
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Search className="w-4 h-4" />
+              }
+            </Button>
+          </div>
           {cepError && (
-            <p className="text-sm text-amber-600 mt-1">{cepError}</p>
+            <p className="text-sm text-amber-600">{cepError}</p>
           )}
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-3 space-y-2">
           <Label htmlFor="street">Rua *</Label>
           <Input
             id="street"
@@ -125,14 +161,14 @@ export function AddressForm() {
             className={errors.street ? 'border-red-500' : ''}
           />
           {errors.street && (
-            <p className="text-sm text-red-500 mt-1">{errors.street.message}</p>
+            <p className="text-sm text-red-500">{errors.street.message}</p>
           )}
         </div>
       </div>
 
       {/* Linha 2: NÚMERO + COMPLEMENTO */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+        <div className="md:col-span-1 space-y-2">
           <Label htmlFor="number">Número *</Label>
           <Input
             id="number"
@@ -141,11 +177,11 @@ export function AddressForm() {
             className={errors.number ? 'border-red-500' : ''}
           />
           {errors.number && (
-            <p className="text-sm text-red-500 mt-1">{errors.number.message}</p>
+            <p className="text-sm text-red-500">{errors.number.message}</p>
           )}
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-3 space-y-2">
           <Label htmlFor="complement">Complemento</Label>
           <Input
             id="complement"
@@ -154,14 +190,14 @@ export function AddressForm() {
             className={errors.complement ? 'border-red-500' : ''}
           />
           {errors.complement && (
-            <p className="text-sm text-red-500 mt-1">{errors.complement.message}</p>
+            <p className="text-sm text-red-500">{errors.complement.message}</p>
           )}
         </div>
       </div>
 
       {/* Linha 3: BAIRRO + CIDADE + ESTADO */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-        <div className="md:col-span-2">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-start">
+        <div className="md:col-span-2 space-y-2">
           <Label htmlFor="district">Bairro *</Label>
           <Input
             id="district"
@@ -170,11 +206,11 @@ export function AddressForm() {
             className={errors.district ? 'border-red-500' : ''}
           />
           {errors.district && (
-            <p className="text-sm text-red-500 mt-1">{errors.district.message}</p>
+            <p className="text-sm text-red-500">{errors.district.message}</p>
           )}
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-2">
           <Label htmlFor="city">Cidade *</Label>
           <Input
             id="city"
@@ -183,11 +219,11 @@ export function AddressForm() {
             className={errors.city ? 'border-red-500' : ''}
           />
           {errors.city && (
-            <p className="text-sm text-red-500 mt-1">{errors.city.message}</p>
+            <p className="text-sm text-red-500">{errors.city.message}</p>
           )}
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-2">
           <Label htmlFor="state">Estado *</Label>
           <Select value={stateValue || ''} onValueChange={(value) => setValue('state', value)}>
             <SelectTrigger id="state" className={errors.state ? 'border-red-500' : ''}>
@@ -202,7 +238,7 @@ export function AddressForm() {
             </SelectContent>
           </Select>
           {errors.state && (
-            <p className="text-sm text-red-500 mt-1">{errors.state.message}</p>
+            <p className="text-sm text-red-500">{errors.state.message}</p>
           )}
         </div>
       </div>

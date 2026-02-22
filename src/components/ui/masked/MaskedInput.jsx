@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
  * @param {string} [props.label] - Label do campo
  * @param {any} [props.error] - Erro de validação
  * @param {string|Array} props.mask - Máscara do IMask
- * @param {string|boolean} [props.unmask='typed'] - Tipo de unmask: 'typed' | true | false
+ * @param {boolean} [props.unmask=true] - Se deve remover a máscara do valor armazenado
  * @param {string} [props.placeholder] - Placeholder
  * @param {boolean} [props.disabled=false] - Se o campo está desabilitado
  * @param {string} [props.className=''] - Classes CSS adicionais
@@ -24,7 +24,7 @@ export function MaskedInput({
   label,
   error = null,
   mask,
-  unmask = 'typed', // 'typed' | true | false
+  unmask = true,
   placeholder,
   disabled = false,
   className = '',
@@ -46,10 +46,9 @@ export function MaskedInput({
             placeholder={placeholder}
             disabled={disabled}
             value={field.value || ''}
-            onAccept={(value, maskRef) => {
-              // Salva o valor sem máscara no form
-              const unmaskedValue = maskRef.unmaskedValue;
-              field.onChange(unmaskedValue);
+            onAccept={(_value, maskRef) => {
+              // Salva o valor sem máscara no form (somente dígitos/chars válidos)
+              field.onChange(maskRef.unmaskedValue);
             }}
             onBlur={() => {
               field.onBlur();
