@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { safeUrlTransform } from '@/lib/constants';
+import { preprocessContent, getChecklistProgress } from '@/lib/markdownUtils';
 import {
   MoreVertical,
   Link as LinkIcon,
@@ -48,6 +49,18 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
   const updateNoteMutation = useUpdateNote();
   const deleteNoteMutation = useDeleteNote();
   const Icon = typeIcons[note.type] || Type;
+
+  // F1 — Preprocessed content for view mode (preserves newlines)
+  const processedContent = useMemo(
+    () => preprocessContent(note.content),
+    [note.content]
+  );
+
+  // F2 — Checklist progress indicator
+  const checklistProgress = useMemo(
+    () => getChecklistProgress(note.content),
+    [note.content]
+  );
 
   const handleDelete = async () => {
     try {
@@ -134,6 +147,12 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
                   Sem pasta
                 </Badge>
               )}
+              {/* F2 — Checklist progress badge */}
+              {checklistProgress.total > 0 && (
+                <span className="text-xs text-indigo-600 font-medium">
+                  ✓ {checklistProgress.completed}/{checklistProgress.total}
+                </span>
+              )}
             </div>
             
             <h3 className="font-medium text-slate-900 mb-1 line-clamp-1">
@@ -168,7 +187,7 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
                 remarkPlugins={[remarkGfm]}
                 urlTransform={safeUrlTransform}
               >
-                {note.content}
+                {processedContent}
               </ReactMarkdown>
             </div>
             

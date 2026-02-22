@@ -41,6 +41,7 @@ import ColorPickerPopover from '@/components/folders/ColorPickerPopover';
 import IconPickerPopover from '@/components/folders/IconPickerPopover';
 import SubFolderCreateDialog from '@/components/folders/SubFolderCreateDialog';
 import { getFolderIcon } from '@/lib/folderIconHelper';
+import SearchBar from '@/components/notes/SearchBar';
 
 /** @typedef {import('@/types/models').Folder} Folder */
 /** @typedef {import('@/types/models').Note} Note */
@@ -279,7 +280,12 @@ function SidebarContent({
   notesCount, 
   isCollapsed = false, 
   onToggleCollapse,
-  isMobile = false
+  isMobile = false,
+  onSearch,
+  onSelectSearchResult,
+  searchScope,
+  onSearchScopeChange,
+  onFilterChange,
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -356,6 +362,19 @@ function SidebarContent({
             <div>
               <h1 className="font-bold text-slate-900">Kawa Note</h1>
             </div>
+          </div>
+        )}
+
+        {/* Search bar — visible only when sidebar is expanded */}
+        {!isCollapsed && (
+          <div className="pt-2">
+            <SearchBar
+              onSearch={onSearch}
+              onFilterChange={onFilterChange}
+              onSearchScopeChange={onSearchScopeChange}
+              searchScope={searchScope}
+              onSelectResult={onSelectSearchResult}
+            />
           </div>
         )}
       </div>
@@ -633,7 +652,13 @@ export default function Sidebar({
   onToggleCollapse,
   isMobile = false,
   isSidebarOpen = false,
-  onCloseSidebar = () => {}
+  onCloseSidebar = () => {},
+  // Search props
+  onSearch,
+  onSelectSearchResult,
+  searchScope,
+  onSearchScopeChange,
+  onFilterChange,
 }) {
   // Mobile: renderizar como Sheet drawer
   if (isMobile) {
@@ -650,6 +675,11 @@ export default function Sidebar({
             isCollapsed={false}
             onToggleCollapse={() => {}}
             isMobile={true}
+            onSearch={onSearch}
+            onSelectSearchResult={onSelectSearchResult}
+            searchScope={searchScope}
+            onSearchScopeChange={onSearchScopeChange}
+            onFilterChange={onFilterChange}
           />
         </SheetContent>
       </Sheet>
@@ -669,6 +699,11 @@ export default function Sidebar({
         isCollapsed={isCollapsed}
         onToggleCollapse={onToggleCollapse}
         isMobile={false}
+        onSearch={onSearch}
+        onSelectSearchResult={onSelectSearchResult}
+        searchScope={searchScope}
+        onSearchScopeChange={onSearchScopeChange}
+        onFilterChange={onFilterChange}
       />
     </div>
   );

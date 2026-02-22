@@ -1,21 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/layout/Sidebar';
-import TabBar from '../components/layout/TabBar';
 import BottomNav from '../components/layout/BottomNav';
 import FAB from '../components/layout/FAB';
 import MobileSearchModal from '../components/layout/MobileSearchModal';
 import MobileNoteStrip from '../components/layout/MobileNoteStrip';
+import NoteListPanel from '../components/notes/NoteListPanel';
+import NoteDetailPanel from '../components/notes/NoteDetailPanel';
+import NoteEmptyPanel from '../components/notes/NoteEmptyPanel';
 import QuickEditor from '../components/notes/QuickEditor';
-import NoteCard from '../components/notes/NoteCard';
-import NoteEditor from '../components/notes/NoteEditor';
-import SearchBar from '../components/notes/SearchBar';
 import MoveNoteDialog from '../components/notes/MoveNoteDialog';
 import { useNotes } from '@/api/useNotes';
-import { Skeleton } from "@/components/ui/skeleton";
-import { AnimatePresence } from "framer-motion";
-import { Brain, Sparkles, ChevronLeft, ChevronRight, Lock, Menu } from "lucide-react";
+import { Skeleton } from '@/components/ui/skeleton';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Sparkles, ChevronLeft, ChevronRight, Lock, Menu } from 'lucide-react';
+// import { Brain, Sparkles, ChevronLeft, ChevronRight, Lock, Menu } from 'lucide-react';
 import { useFolderHierarchy } from '@/api/useFolders';
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import { needsMigration, migrateAllNotes, getMigrationStatusMessage } from '@/lib/noteMigration';
 import { isKeyAvailable } from '@/lib/keyManager';
 import { NO_FOLDER_SENTINEL } from '@/lib/constants';
@@ -27,68 +27,76 @@ import { toast } from 'sonner';
 /** @typedef {import('@/types/models').Folder} Folder */
 
 /**
- * Home page component - displays notes with filtering, search, and editing capabilities
+ * Home page component — V2 two-panel layout.
+ * Desktop (≥ lg): [Sidebar] [NoteListPanel 320px] [NoteDetailPanel flex-1]
+ * Mobile (< lg): full-screen list or detail (alternating).
  * @returns {JSX.Element}
  */
 export default function Home() {
+  // ─── Filter & search state ───────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     text: true,
     url: true,
     image: true,
     word: true,
-    pinnedOnly: false
+    pinnedOnly: false,
   });
   const [selectedFolder, setSelectedFolder] = useState(/** @type {Folder | null} */ (null));
-  const [openTabs, setOpenTabs] = useState([]);
-  const [activeTab, setActiveTab] = useState(null);
   const [searchScope, setSearchScope] = useState(/** @type {'folder' | 'global'} */ ('global'));
+
+  // ─── V2: single active note replaces openTabs/activeTab ──────────────────
+  /** @type {[Note|null, Function]} */
+  const [activeNote, setActiveNote] = useState(null);
+  /** Whether the right panel is in "create new note" mode */
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+
+  // ─── Other UI state ───────────────────────────────────────────────────────
   const [noteToMove, setNoteToMove] = useState(/** @type {Note | null} */ (null));
   const [migrationStatus, setMigrationStatus] = useState(/** @type {'idle' | 'running' | 'completed' | 'error'} */ ('idle'));
   const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useSidebarState();
   const { isMobile, isSidebarOpen, openSidebar, closeSidebar, activeBottomTab, setActiveBottomTab } = useMobileLayout();
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  /** Mobile view: 'list' | 'detail' */
+  const [mobileView, setMobileView] = useState('list');
   const encryptionToastShown = useRef(false);
 
+  // ─── Data fetching ────────────────────────────────────────────────────────
   const { data: notesResponse = { data: [] }, isLoading, refetch } = useNotes();
   const notes = notesResponse?.data || [];
 
-  // Auto-migration on mount
+  // ─── Auto-migration on mount ──────────────────────────────────────────────
   useEffect(() => {
     async function checkAndMigrate() {
       if (notes.length === 0 || migrationStatus !== 'idle') return;
-      
+
       const keyAvailable = await isKeyAvailable();
       if (!keyAvailable) return;
-      
+
       if (needsMigration(notes)) {
         setMigrationStatus('running');
-        
+
         try {
           const result = await migrateAllNotes(notes, (current, total) => {
             setMigrationProgress({ current, total });
           });
-          
+
           console.log('Migration completed:', result);
           if (result.errors.length > 0) {
             console.error('Migration errors:', result.errors);
           }
-          
+
           setMigrationStatus('completed');
-          
-          // Refetch notes to get updated data
           await refetch();
-          
-          // Show encryption toast after migration completes
+
           if (!encryptionToastShown.current) {
             encryptionToastShown.current = true;
             toast.success('🔒 Suas notas são encriptadas end-to-end. Apenas você pode lê-las.', {
               duration: 5000
             });
           }
-          
-          // Show status message
+
           const message = getMigrationStatusMessage(result);
           console.log(message);
         } catch (error) {
@@ -96,18 +104,17 @@ export default function Home() {
           setMigrationStatus('error');
         }
       } else if (notes.length > 0 && !encryptionToastShown.current) {
-        // No migration needed, but show encryption toast once
         encryptionToastShown.current = true;
         toast.success('🔒 Suas notas são encriptadas end-to-end. Apenas você pode lê-las.', {
           duration: 5000
         });
       }
     }
-    
+
     checkAndMigrate();
   }, [notes.length, migrationStatus, refetch]);
 
-  // Folders para navegação < >
+  // ─── Folder navigation ────────────────────────────────────────────────────
   const { data: foldersResponse = { data: [] } } = useFolderHierarchy();
   const flattenFolders = (items, result = []) => {
     for (const item of items) {
@@ -119,7 +126,6 @@ export default function Home() {
   const folders = flattenFolders(foldersResponse?.data || []);
   const rootFolders = folders.filter((/** @type {Folder} */ f) => !f.parentFolderId);
 
-  // Lista navegável: [null (Todas), NO_FOLDER_SENTINEL (Sem Pasta), ...pastas ordenadas]
   const navList = [null, NO_FOLDER_SENTINEL, ...rootFolders.sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name))];
   const currentNavIndex = navList.findIndex(item =>
     item === null ? selectedFolder === null : (item?.virtual ? selectedFolder?.virtual : item?.id === selectedFolder?.id)
@@ -135,206 +141,21 @@ export default function Home() {
     setSelectedFolder(navList[nextIndex]);
   };
 
-  // Populate tabs with filtered notes when folder changes or notes load
-  useEffect(() => {
-    // Recalculate filtered notes for tabs
-    const isGlobalSearch = searchScope === 'global' && searchTerm;
-    const tabNotes = notes.filter((note) => {
-      // Filtro de pasta (ignorado em pesquisa global com termo ativo)
-      if (!isGlobalSearch) {
-        if (selectedFolder) {
-          if (selectedFolder.virtual) {
-            // "Sem Pasta" mode: only notes without a folderId
-            if (note.folderId) return false;
-          } else {
-            // Normal folder: only notes in this specific folder
-            if (note.folderId !== selectedFolder.id) return false;
-          }
-        } else {
-          // "Todas as Notas": no folder filtering
-        }
-      }
-
-      // Filtro de tipo
-      if (!filters[note.type]) return false;
-
-      // Filtro de fixada
-      if (filters.pinnedOnly && !note.pinned) return false;
-
-      // Busca textual
-      if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        return (
-          note.title?.toLowerCase().includes(search) ||
-          note.content?.toLowerCase().includes(search) ||
-          note.tags?.some(tag => tag.toLowerCase().includes(search)) ||
-          note.context?.toLowerCase().includes(search)
-        );
-      }
-
-      return true;
-    });
-
-    if (tabNotes.length === 0) {
-      setOpenTabs([]);
-      setActiveTab(null);
-      return;
-    }
-
-    // Create tabs for all filtered notes
-    const noteTabs = tabNotes.map(note => ({
-      id: note.id,
-      title: note.title || 'Sem título',
-      type: 'note',
-      note
-    }));
-
-    setOpenTabs(noteTabs);
-    
-    // Set first note as active if no active tab or active tab is not in the new list
-    if (!activeTab || !noteTabs.find(t => t.id === activeTab.id)) {
-      setActiveTab(noteTabs[0]);
-    }
-  }, [selectedFolder, notes, filters, searchTerm, searchScope]);
-
-  // Abrir nota em tab (single-click) - just activate existing tab
-  const openNoteInTab = (/** @type {Note} */ note) => {
-    const existingTab = openTabs.find(t => t.id === note.id && t.type === 'note');
-    if (existingTab) {
-      setActiveTab(existingTab);
-    }
-  };
-
-  // Nova aba com QuickEditor
-  const openNewTab = () => {
-    const quickEditorTab = {
-      id: `quick-${Date.now()}`,
-      title: 'Nova nota',
-      type: 'quickEditor'
-    };
-    setOpenTabs(prev => [...prev, quickEditorTab]);
-    setActiveTab(quickEditorTab);
-  };
-
-  // Fechar aba (apenas QuickEditor tabs podem ser fechadas)
-  const closeTab = (/** @type {string} */ tabId) => {
-    const tabToClose = openTabs.find(t => t.id === tabId);
-    
-    // Não permitir fechar tabs de notas (apenas QuickEditor)
-    if (tabToClose?.type === 'note') {
-      return;
-    }
-
-    setOpenTabs(prev => {
-      const currentIndex = prev.findIndex(t => t.id === tabId);
-      const newTabs = prev.filter(t => t.id !== tabId);
-      
-      if (activeTab?.id === tabId) {
-        if (newTabs.length > 0) {
-          // Ativar aba anterior ou próxima
-          const newActiveIndex = currentIndex > 0 ? currentIndex - 1 : 0;
-          setActiveTab(newTabs[newActiveIndex]);
-        } else {
-          setActiveTab(null);
-        }
-      }
-      return newTabs;
-    });
-  };
-
-  // Navegar entre abas
-  const navigateTabPrev = () => {
-    if (openTabs.length === 0) return;
-    const currentIndex = openTabs.findIndex(t => t.id === activeTab?.id);
-    const prevIndex = currentIndex <= 0 ? openTabs.length - 1 : currentIndex - 1;
-    setActiveTab(openTabs[prevIndex]);
-  };
-
-  const navigateTabNext = () => {
-    if (openTabs.length === 0) return;
-    const currentIndex = openTabs.findIndex(t => t.id === activeTab?.id);
-    const nextIndex = currentIndex >= openTabs.length - 1 ? 0 : currentIndex + 1;
-    setActiveTab(openTabs[nextIndex]);
-  };
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ctrl+Tab / Ctrl+Shift+Tab - Navigate tabs
-      if (e.ctrlKey && e.key === 'Tab') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          navigateTabPrev();
-        } else {
-          navigateTabNext();
-        }
-      }
-      // Ctrl+N - New tab
-      if (e.ctrlKey && e.key === 'n' && !e.shiftKey) {
-        e.preventDefault();
-        openNewTab();
-      }
-      // Ctrl+W - Close active tab
-      if (e.ctrlKey && e.key === 'w') {
-        e.preventDefault();
-        if (activeTab) {
-          closeTab(activeTab.id);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, openTabs]);
-
-  // Callback quando nota é criada no QuickEditor
-  const handleNoteSaved = async (newNote) => {
-    await refetch();
-    
-    // Substituir aba quickEditor pela nova nota
-    if (activeTab?.type === 'quickEditor') {
-      // Aguardar refetch completar e pegar a nota atualizada
-      setTimeout(() => {
-        const createdNote = notes.find(n => n.id === newNote?.id);
-        if (createdNote) {
-          const newTab = {
-            id: createdNote.id,
-            title: createdNote.title || 'Sem título',
-            type: 'note',
-            note: createdNote
-          };
-          setOpenTabs(prev => prev.map(t => t.id === activeTab.id ? newTab : t));
-          setActiveTab(newTab);
-        }
-      }, 100);
-    }
-  };
-
-  // Filtrar notas
+  // ─── Filtering logic ──────────────────────────────────────────────────────
   const isGlobalSearch = searchScope === 'global' && searchTerm;
+
   const filteredNotes = notes.filter((/** @type {Note} */ note) => {
-    // Filtro de pasta (ignorado em pesquisa global com termo ativo)
     if (!isGlobalSearch) {
       if (selectedFolder) {
         if (selectedFolder.virtual) {
-          // "Sem Pasta" mode: only notes without a folderId
           if (note.folderId) return false;
         } else {
-          // Normal folder: only notes in this specific folder
           if (note.folderId !== selectedFolder.id) return false;
         }
-      } else {
-        // "Todas as Notas": no folder filtering
       }
     }
-
-    // Filtro de tipo
     if (!filters[note.type]) return false;
-
-    // Filtro de fixada
     if (filters.pinnedOnly && !note.pinned) return false;
-
-    // Busca textual
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       return (
@@ -344,47 +165,148 @@ export default function Home() {
         note.context?.toLowerCase().includes(search)
       );
     }
-
     return true;
   });
 
-  // Folder-scoped note count (unfiltered by type/pin/search)
   const folderNoteCount = selectedFolder
     ? selectedFolder.virtual
       ? notes.filter(n => !n.folderId).length
       : notes.filter(n => n.folderId === selectedFolder.id).length
     : notes.length;
 
-  // Separar notas fixadas
-  const pinnedNotes = filteredNotes.filter(n => n.pinned);
-  const regularNotes = filteredNotes.filter(n => !n.pinned);
+  // ─── Active note lifecycle management ────────────────────────────────────
+  // If the active note is no longer in the filtered list (deleted/moved), clear it
+  useEffect(() => {
+    if (activeNote && !filteredNotes.find(n => n.id === activeNote.id)) {
+      setActiveNote(null);
+    }
+  }, [filteredNotes, activeNote]);
+
+  // ─── Note selection ───────────────────────────────────────────────────────
+  const handleSelectNote = useCallback((note) => {
+    setActiveNote(note);
+    setIsCreatingNote(false);
+    if (isMobile) setMobileView('detail');
+  }, [isMobile]);
+
+  // ─── Note deletion from list ──────────────────────────────────────────────
+  const handleDeleteNote = useCallback((noteId) => {
+    if (activeNote?.id === noteId) {
+      setActiveNote(null);
+      if (isMobile) setMobileView('list');
+    }
+    refetch();
+  }, [activeNote, isMobile, refetch]);
+
+  // ─── Pin toggle from list ─────────────────────────────────────────────────
+  const handleTogglePin = useCallback((_updatedNote) => {
+    refetch();
+  }, [refetch]);
+
+  // ─── Open new note creation panel (right side) ────────────────────────────
+  const handleNewNote = useCallback(() => {
+    setActiveNote(null);
+    setIsCreatingNote(true);
+    if (isMobile) setMobileView('detail');
+  }, [isMobile]);
+
+  // ─── Note saved from QuickEditor (in right panel) ────────────────────────
+  const handleNoteSaved = useCallback(async (newNote) => {
+    setIsCreatingNote(false);
+    await refetch();
+    // Auto-select the newly created note in the detail panel
+    if (newNote?.id) {
+      setTimeout(() => {
+        // notes list not yet updated, use a second refetch check
+        setActiveNote(prev => prev); // trigger re-evaluation
+      }, 50);
+      // Try to find and select it after refetch updates the list
+      setTimeout(() => {
+        const created = notes.find(n => n.id === newNote.id);
+        if (created) {
+          setActiveNote(created);
+        }
+      }, 300);
+    }
+  }, [notes, refetch]);
+
+  // ─── Keyboard shortcuts ───────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+N — create new note (focuses QuickEditor — handled by QuickEditor itself via focus)
+      if (e.ctrlKey && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        // No explicit tab model needed; QuickEditor is always visible
+      }
+      // Arrow Up/Down — navigate between notes in the list
+      if (!e.ctrlKey && !e.metaKey && filteredNotes.length > 0) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const currentIndex = activeNote
+            ? filteredNotes.findIndex(n => n.id === activeNote.id)
+            : -1;
+          if (e.key === 'ArrowDown') {
+            const nextIndex = currentIndex < filteredNotes.length - 1 ? currentIndex + 1 : 0;
+            handleSelectNote(filteredNotes[nextIndex]);
+            e.preventDefault();
+          } else {
+            const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredNotes.length - 1;
+            handleSelectNote(filteredNotes[prevIndex]);
+            e.preventDefault();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeNote, filteredNotes, handleSelectNote]);
+
+  // ─── Mobile: FAB creates note ─────────────────────────────────────────────
+  const handleFABClick = useCallback(() => {
+    handleNewNote();
+  }, [handleNewNote]);
+
+  // ─── Mobile: back from detail → list ─────────────────────────────────────
+  const handleMobileBack = useCallback(() => {
+    setMobileView('list');
+    setActiveNote(null);
+  }, []);
+
+  // ─── Panel width: 320px fixed (Q4 = B) ───────────────────────────────────
+  const LIST_PANEL_WIDTH = 'w-[320px] min-w-[240px]';
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      {/* Sidebar - Desktop only, or Mobile drawer */}
+      {/* Sidebar — Desktop only, or Mobile drawer */}
       <Sidebar
         selectedFolder={selectedFolder}
-        onSelectFolder={setSelectedFolder}
+        onSelectFolder={(folder) => {
+          setSelectedFolder(folder);
+          setActiveNote(null); // clear selection when switching folder
+        }}
         notesCount={notes.length}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isMobile={isMobile}
         isSidebarOpen={isSidebarOpen}
         onCloseSidebar={closeSidebar}
+        onSearch={setSearchTerm}
+        onSelectSearchResult={handleSelectNote}
+        searchScope={searchScope}
+        onSearchScopeChange={setSearchScope}
       />
 
-      {/* Main Content — pb-28 em mobile quando strip visível, pb-16 normal, pb-0 desktop */}
-      <div className={`flex-1 flex flex-col overflow-hidden md:pb-0 ${isMobile && activeTab ? 'pb-28' : 'pb-16'}`}>
-        {/* Header - Always visible */}
-        <div className="border-b border-slate-200 bg-white">
-          {/* Migration Status Banner */}
+      {/* Main content area */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${isMobile ? (activeNote ? 'pb-28' : 'pb-16') : 'pb-0'}`}>
+
+        {/* ── Top header ── */}
+        <div className="border-b border-slate-200 bg-white shrink-0">
+          {/* Migration Banner */}
           {migrationStatus === 'running' && (
             <div className="mx-3 md:mx-6 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
               <Lock className="w-5 h-5 text-blue-600 animate-pulse" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-blue-900">
-                  Encriptando suas notas...
-                </p>
+                <p className="text-sm font-medium text-blue-900">Encriptando suas notas...</p>
                 <p className="text-xs text-blue-700">
                   {migrationProgress.current} de {migrationProgress.total} notas processadas
                 </p>
@@ -392,15 +314,16 @@ export default function Home() {
             </div>
           )}
 
-          {/* Título + SearchBar na mesma linha */}
+          {/* Folder navigation + title */}
           <div className="flex items-center gap-2 px-3 md:px-6 py-3">
-            {/* Hamburger menu - Mobile only */}
+            {/* Hamburger — Mobile */}
             {isMobile && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 shrink-0 md:hidden"
                 onClick={openSidebar}
+                aria-label="Abrir menu lateral"
               >
                 <Menu className="w-5 h-5" />
               </Button>
@@ -412,10 +335,12 @@ export default function Home() {
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={navigatePrev}
+                aria-label="Pasta anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
             )}
+
             <div className="shrink-0">
               <h1 className="text-xl font-bold text-slate-900 leading-tight">
                 {isGlobalSearch ? 'Pesquisa Global' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
@@ -424,161 +349,191 @@ export default function Home() {
                 {folderNoteCount} {folderNoteCount === 1 ? 'nota' : 'notas'}
               </p>
             </div>
+
             {navList.length > 1 && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={navigateNext}
+                aria-label="Próxima pasta"
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
             )}
 
-            {/* SearchBar inline - Desktop only */}
-            <div className="flex-1 hidden md:block">
-              <SearchBar
-                onSearch={setSearchTerm}
-                onFilterChange={setFilters}
-                onSearchScopeChange={setSearchScope}
-                searchScope={searchScope}
-                onSelectResult={(note) => openNoteInTab(note)}
-              />
-            </div>
-
-            <div className="sm:flex hidden items-center gap-2 text-sm text-slate-500 shrink-0">
+            <div className="sm:flex hidden items-center gap-2 text-sm text-slate-500 ml-auto shrink-0">
               <Sparkles className="w-4 h-4" />
               <span>{notes.length} total</span>
             </div>
           </div>
         </div>
 
-        {/* Tab Bar - Hidden on mobile */}
-        <div className="md:block hidden">
-          <TabBar
-            tabs={openTabs}
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            onCloseTab={closeTab}
-            onNavigatePrev={navigateTabPrev}
-            onNavigateNext={navigateTabNext}
-            onNewTab={openNewTab}
-          />
-        </div>
-
-        {/* Content Region - Changes based on activeTab */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {activeTab ? (
-            activeTab.type === 'quickEditor' ? (
-              <div className="flex-1 overflow-y-auto px-6 py-4">
-                <QuickEditor
-                  onNoteSaved={handleNoteSaved}
-                  folderId={selectedFolder?.id || null}
-                  fullHeight
-                />
-              </div>
-            ) : (
-              <NoteEditor
-                note={activeTab.note}
-                onSave={refetch}
-                onClose={() => closeTab(activeTab.id)}
-                allNotes={notes}
-                onMoveNote={setNoteToMove}
-              />
-            )
-          ) : (
-            <div className="flex-1 overflow-y-auto">
-              <div className="px-6 py-6">
-                <QuickEditor onNoteSaved={refetch} folderId={selectedFolder?.id || null} />
-        
+        {/* ── Content region ── */}
         {isLoading ? (
-          <div className="space-y-4 mt-6">
-            {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-32 rounded-2xl" />
+          <div className="flex-1 p-6 space-y-3">
+            {[1, 2, 3, 4].map(i => (
+              <Skeleton key={i} className="h-16 rounded-xl" />
             ))}
           </div>
-        ) : filteredNotes.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 mb-4">
-              <Brain className="h-8 w-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchTerm ? 'Nenhuma nota encontrada' : 'Comece a capturar ideias'}
-            </h3>
-            <p className="text-slate-500 max-w-sm mx-auto">
-              {searchTerm 
-                ? 'Tente buscar por outros termos ou ajuste os filtros'
-                : 'Adicione sua primeira nota, link ou imagem acima'}
-            </p>
-          </div>
         ) : (
-          <div className="space-y-6 mt-6">
-            {/* Notas Fixadas */}
-            {pinnedNotes.length > 0 && (
-              <div>
-                <h2 className="text-sm font-medium text-slate-500 mb-3 uppercase tracking-wide">
-                  Fixadas
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  <AnimatePresence>
-                    {pinnedNotes.map(note => (
-                      <div
-                        key={note.id}
-                        onClick={() => openNoteInTab(note)}
-                        className="cursor-pointer"
-                      >
-                        <NoteCard
-                          note={note}
-                          onDelete={() => refetch()}
-                          onUpdate={() => refetch()}
-                          showFolderBadge={isGlobalSearch}
-                          onMoveNote={setNoteToMove}
+          <>
+            {/* ────────── DESKTOP LAYOUT (≥ lg) ────────── */}
+            <div className="hidden lg:flex flex-1 overflow-hidden">
+              {/* Left panel: note list + search + QuickEditor */}
+              <div className={`${LIST_PANEL_WIDTH} shrink-0 overflow-hidden`}>
+                <NoteListPanel
+                  notes={filteredNotes}
+                  activeNoteId={activeNote?.id || null}
+                  onSelectNote={handleSelectNote}
+                  onDeleteNote={handleDeleteNote}
+                  onTogglePin={handleTogglePin}
+                  onSearch={setSearchTerm}
+                  searchTerm={searchTerm}
+                  onFilterChange={setFilters}
+                  searchScope={searchScope}
+                  onSearchScopeChange={setSearchScope}
+                  onSelectSearchResult={handleSelectNote}
+                  onNewNote={handleNewNote}
+                />
+              </div>
+
+              {/* Right panel: create / detail / empty */}
+              <div className="flex-1 overflow-hidden">
+                <AnimatePresence mode="wait">
+                  {isCreatingNote ? (
+                    <motion.div
+                      key="create"
+                      className="h-full flex flex-col bg-white border-l border-slate-200"
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 16 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      {/* Creator header */}
+                      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 shrink-0">
+                        <span className="text-sm font-semibold text-slate-700">Nova nota</span>
+                        <button
+                          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                          onClick={() => setIsCreatingNote(false)}
+                          aria-label="Cancelar criação"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {/* QuickEditor full-width in right panel */}
+                      <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <QuickEditor
+                          onNoteSaved={handleNoteSaved}
+                          folderId={selectedFolder?.id || null}
+                          fullHeight
                         />
                       </div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                    </motion.div>
+                  ) : activeNote ? (
+                    <motion.div
+                      key={activeNote.id}
+                      className="h-full"
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 16 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <NoteDetailPanel
+                        note={activeNote}
+                        onUpdate={refetch}
+                        onDelete={handleDeleteNote}
+                        onMoveNote={setNoteToMove}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      className="h-full"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <NoteEmptyPanel />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            )}
-            
-            {/* Notas Regulares */}
-            {regularNotes.length > 0 && (
-              <div>
-                {pinnedNotes.length > 0 && (
-                  <h2 className="text-sm font-medium text-slate-500 mb-3 uppercase tracking-wide">
-                    Todas as notas
-                  </h2>
+            </div>
+
+            {/* ────────── MOBILE LAYOUT (< lg) ────────── */}
+            <div className="flex lg:hidden flex-1 overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                {(mobileView === 'list' && !isCreatingNote) || (!activeNote && !isCreatingNote) ? (
+                  <motion.div
+                    key="mobile-list"
+                    className="w-full h-full"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <NoteListPanel
+                      notes={filteredNotes}
+                      activeNoteId={activeNote?.id || null}
+                      onSelectNote={handleSelectNote}
+                      onDeleteNote={handleDeleteNote}
+                      onTogglePin={handleTogglePin}
+                      onSearch={setSearchTerm}
+                      searchTerm={searchTerm}
+                      onFilterChange={setFilters}
+                      searchScope={searchScope}
+                      onSearchScopeChange={setSearchScope}
+                      onSelectSearchResult={handleSelectNote}
+                      onNewNote={handleNewNote}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="mobile-detail"
+                    className="w-full h-full"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    {isCreatingNote ? (
+                      <div className="h-full flex flex-col bg-white">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+                          <span className="text-sm font-semibold text-slate-700">Nova nota</span>
+                          <button
+                            className="text-xs text-slate-400 hover:text-slate-600"
+                            onClick={() => { setIsCreatingNote(false); setMobileView('list'); }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-4 py-4">
+                          <QuickEditor
+                            onNoteSaved={handleNoteSaved}
+                            folderId={selectedFolder?.id || null}
+                            fullHeight
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <NoteDetailPanel
+                        note={activeNote}
+                        onUpdate={refetch}
+                        onDelete={handleDeleteNote}
+                        onMoveNote={setNoteToMove}
+                      />
+                    )}
+                  </motion.div>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  <AnimatePresence>
-                    {regularNotes.map(note => (
-                      <div
-                        key={note.id}
-                        onClick={() => openNoteInTab(note)}
-                        className="cursor-pointer"
-                      >
-                        <NoteCard
-                          note={note}
-                          onDelete={() => refetch()}
-                          onUpdate={() => refetch()}
-                          showFolderBadge={isGlobalSearch}
-                          onMoveNote={setNoteToMove}
-                        />
-                      </div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-          </div>
+              </AnimatePresence>
+            </div>
+          </>
         )}
       </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Dialog para mover notas entre pastas */}
+      {/* MoveNoteDialog — shared between desktop and mobile */}
       <MoveNoteDialog
         note={noteToMove}
         open={noteToMove !== null}
@@ -586,7 +541,7 @@ export default function Home() {
         onMoved={refetch}
       />
 
-      {/* Bottom Navigation - Mobile only */}
+      {/* ── Mobile-only UI ── */}
       {isMobile && (
         <BottomNav
           activeTab={activeBottomTab}
@@ -598,26 +553,27 @@ export default function Home() {
               setIsMobileSearchOpen(true);
             } else if (tab === 'notes') {
               setSelectedFolder(null);
+              setMobileView('list');
             }
           }}
         />
       )}
 
-      {/* FAB - Mobile only — sobe quando a MobileNoteStrip está visível */}
-      {isMobile && <FAB onClick={openNewTab} elevated={isMobile && !!activeTab} />}
+      {isMobile && <FAB onClick={handleFABClick} elevated={isMobile && !!activeNote} />}
 
-      {/* Mobile Note Strip — navegação entre notas, acima da BottomNav */}
       {isMobile && (
         <MobileNoteStrip
-          tabs={openTabs}
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          onBack={() => setActiveTab(null)}
-          onNewNote={openNewTab}
+          tabs={activeNote ? [{ id: activeNote.id, title: activeNote.title || 'Sem título', type: 'note', note: activeNote }] : []}
+          activeTab={activeNote ? { id: activeNote.id, title: activeNote.title || 'Sem título', type: 'note', note: activeNote } : null}
+          onSelectTab={(tab) => {
+            setActiveNote(tab.note);
+            setMobileView('detail');
+          }}
+          onBack={handleMobileBack}
+          onNewNote={handleFABClick}
         />
       )}
 
-      {/* Mobile Search Modal */}
       <MobileSearchModal
         open={isMobileSearchOpen}
         onClose={() => {
@@ -625,7 +581,7 @@ export default function Home() {
           setActiveBottomTab('notes');
         }}
         onSelectResult={(note) => {
-          openNoteInTab(note);
+          handleSelectNote(note);
           setActiveBottomTab('notes');
         }}
       />

@@ -10,7 +10,8 @@ import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
 export default function QuickEditor({ onNoteSaved, folderId = null, fullHeight = false }) {
   const [content, setContent] = useState('');
   const [type, setType] = useState('text');
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Auto-expand when rendered in full-height panel mode
+  const [isExpanded, setIsExpanded] = useState(fullHeight);
   const [error, setError] = useState(null);
   const createNoteMutation = useCreateNote();
 
@@ -75,12 +76,12 @@ export default function QuickEditor({ onNoteSaved, folderId = null, fullHeight =
         noteData.url = content.trim();
       }
 
-      await createNoteMutation.mutateAsync(noteData);
+      const result = await createNoteMutation.mutateAsync(noteData);
       
       setContent('');
-      setIsExpanded(false);
+      if (!fullHeight) setIsExpanded(false);
       toast.success('Nota criada com sucesso');
-      if (onNoteSaved) onNoteSaved();
+      if (onNoteSaved) onNoteSaved(result?.data || result);
     } catch (err) {
       // Check if it's an encryption error and handle logout
       if (checkAndHandleEncryptionError(err)) {
@@ -103,7 +104,7 @@ export default function QuickEditor({ onNoteSaved, folderId = null, fullHeight =
     <motion.div
       className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"
       initial={false}
-      animate={{ height: isExpanded ? 'auto' : '56px' }}
+      animate={{ height: (isExpanded || fullHeight) ? 'auto' : '56px' }}
     >
       <div className="p-5">
         <div className="flex items-start gap-3">
