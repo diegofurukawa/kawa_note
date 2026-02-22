@@ -1,25 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, Pin, Loader2, ExternalLink, FolderInput, Edit3, Eye, Check, CheckSquare, ArrowUp, ArrowDown } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { safeUrlTransform } from '@/lib/constants';
 import { format } from "date-fns";
 import { toast } from 'sonner';
 import { useUpdateNote } from '@/api/useNotes';
 import TagManager from './TagManager';
 import UrlPreviewCard from './UrlPreviewCard';
+import PlainTextRenderer from './PlainTextRenderer';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
 import {
-  preprocessContent,
   toggleCheckbox,
   insertCheckboxItem,
   moveLineUp,
   moveLineDown,
-  getCheckboxLineIndices,
 } from '@/lib/markdownUtils';
 
 const typeColors = {
@@ -201,69 +197,6 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleForceSave, onClose]);
 
-  // F1 — Preprocessed content for view mode (preserves newlines)
-  const processedContent = useMemo(
-    () => preprocessContent(editedNote.content),
-    [editedNote.content]
-  );
-
-  // F2 — Checkbox line indices for mapping rendered checkboxes to content lines
-  const checkboxLines = useMemo(
-    () => getCheckboxLineIndices(editedNote.content),
-    [editedNote.content]
-  );
-
-  // F2 — Stable counter ref for checkboxComponents: reset before each ReactMarkdown render
-  // Using a ref avoids stale closure issues caused by React re-rendering component functions
-  // multiple times (e.g., concurrent mode / strict mode).
-  const checkboxCounterRef = useRef(0);
-
-  // F2 — Custom ReactMarkdown components for interactive checkboxes
-  const checkboxComponents = useMemo(() => ({
-    input: ({ checked, type, node: _node, disabled: _disabled, ...props }) => {
-      if (type !== 'checkbox') return <input type={type} {...props} />;
-      // Each checkbox gets the next slot in the ordered list of checkbox-lines.
-      // The counter is reset to 0 in the JSX just before ReactMarkdown renders,
-      // so it always maps correctly regardless of how many times React calls this.
-      const currentIndex = checkboxCounterRef.current;
-      checkboxCounterRef.current += 1;
-      const contentLineIndex = checkboxLines[currentIndex];
-      return (
-        <input
-          type="checkbox"
-          checked={checked}
-          // Remove `disabled` so the checkbox is interactive (remark-gfm adds disabled by default)
-          onChange={(e) => {
-            e.stopPropagation();
-            if (contentLineIndex !== undefined) {
-              const newContent = toggleCheckbox(editedNote.content, contentLineIndex);
-              handleChange('content', newContent);
-            }
-          }}
-          className="mr-2 cursor-pointer accent-indigo-600"
-        />
-      );
-    },
-    li: ({ children, className, ...props }) => {
-      // Detect if this is a completed task-list-item by inspecting React children
-      let isCheckedItem = false;
-      if (className === 'task-list-item') {
-        React.Children.forEach(children, (child) => {
-          if (React.isValidElement(child) && child.props?.checked === true) {
-            isCheckedItem = true;
-          }
-        });
-      }
-      return (
-        <li
-          className={`${className || ''} ${isCheckedItem ? 'line-through text-slate-400 transition-all duration-200' : ''}`}
-          {...props}
-        >
-          {children}
-        </li>
-      );
-    },
-  }), [checkboxLines, editedNote.content]);
 
   // F2 — Insert a new To-Do item
   const handleInsertTodo = useCallback(() => {
@@ -420,9 +353,9 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
           <Badge className={`${typeColors[editedNote.type]} border-0 text-xs`}>
             {editedNote.type}
           </Badge>
-          <span className="text-xs text-slate-400">
+          {/* <span className="text-xs text-slate-400">
             {format(new Date(editedNote.createdAt), 'dd/MM/yyyy HH:mm')}
-          </span>
+          </span> */}
           {renderSaveIndicator()}
         </div>
 
@@ -513,7 +446,8 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto flex flex-col px-6 py-4">
+        {/* Static metadata section */}
         <div className="space-y-4">
           <Input
             value={editedNote.title}
@@ -553,78 +487,74 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
               />
             </div>
           )}
-
-          {/* ── Content area ── */}
-          {isEditMode ? (
-            // EDIT MODE (both panel and standalone): plain textarea, no distractions
-            <Textarea
-              ref={textareaRef}
-              value={editedNote.content}
-              onChange={(e) => handleChange('content', e.target.value)}
-              onKeyDown={handleTextareaKeyDown}
-              className="min-h-[300px] md:min-h-[400px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700"
-              placeholder="Escreva em Markdown... (- [ ] para criar to-do)"
-              autoFocus
-            />
-          ) : (
-            // VIEW MODE: rendered markdown, checkboxes always interactive.
-            // Counter reset just before render so each checkbox maps to the correct line.
-            <div
-              className="min-h-[200px] md:min-h-[400px] prose prose-sm max-w-none cursor-text"
-              onClick={mode === 'panel' ? (e) => {
-                // Don't enter edit mode when clicking a checkbox — let onChange toggle it.
-                if (e.target.tagName?.toLowerCase() === 'input' && e.target.type === 'checkbox') return;
-                setIsEditMode(true);
-              } : undefined}
-              onDoubleClick={mode === 'standalone' ? () => setIsEditMode(true) : undefined}
-              title={mode === 'panel' ? 'Clique para editar' : 'Clique duplo para editar'}
-            >
-              {editedNote.content ? (
-                <>
-                  {(checkboxCounterRef.current = 0) >= 0 && (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      urlTransform={safeUrlTransform}
-                      components={checkboxComponents}
-                    >
-                      {processedContent}
-                    </ReactMarkdown>
-                  )}
-                </>
-              ) : (
-                <p className="text-slate-400">
-                  {mode === 'panel' ? 'Clique em Editar para começar...' : 'Clique duplo para editar...'}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* URL Preview Card */}
-          {previewData && editedNote.url && (
-            <div className="mt-4">
-              <UrlPreviewCard previewData={previewData} url={editedNote.url} />
-            </div>
-          )}
-
-          {editedNote.context && (
-            <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <h4 className="text-sm font-medium text-indigo-900 mb-2 flex items-center gap-2">
-                💡 Contexto da Internet
-              </h4>
-              <p className="text-sm text-indigo-700 leading-relaxed">
-                {editedNote.context}
-              </p>
-            </div>
-          )}
         </div>
+
+        {/* ── Content area — expands to fill remaining space ── */}
+        {isEditMode ? (
+          // EDIT MODE (both panel and standalone): plain textarea, no distractions
+          <Textarea
+            ref={textareaRef}
+            value={editedNote.content}
+            onChange={(e) => handleChange('content', e.target.value)}
+            onKeyDown={handleTextareaKeyDown}
+            className="flex-1 mt-4 min-h-[200px] border-0 px-0 text-base leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700"
+            placeholder="Escreva em Markdown... (- [ ] para criar to-do)"
+            autoFocus
+          />
+        ) : (
+          // VIEW MODE: plain text renderer preserving whitespace, with clickable URLs and interactive checkboxes.
+          <div
+            className="flex-1 mt-4 min-h-[200px] cursor-text"
+            onClick={mode === 'panel' ? (e) => {
+              // Don't enter edit mode when clicking a checkbox or link — let their own handlers run.
+              if (e.target.tagName?.toLowerCase() === 'input' && e.target.type === 'checkbox') return;
+              if (e.target.tagName?.toLowerCase() === 'a') return;
+              setIsEditMode(true);
+            } : undefined}
+            onDoubleClick={mode === 'standalone' ? () => setIsEditMode(true) : undefined}
+            title={mode === 'panel' ? 'Clique para editar' : 'Clique duplo para editar'}
+          >
+            {editedNote.content ? (
+              <PlainTextRenderer
+                content={editedNote.content}
+                onCheckboxToggle={(lineIndex) => {
+                  const newContent = toggleCheckbox(editedNote.content, lineIndex);
+                  handleChange('content', newContent);
+                }}
+              />
+            ) : (
+              <p className="text-slate-400 font-mono text-base">
+                {mode === 'panel' ? 'Clique em Editar para começar...' : 'Clique duplo para editar...'}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* URL Preview Card */}
+        {previewData && editedNote.url && (
+          <div className="mt-4">
+            <UrlPreviewCard previewData={previewData} url={editedNote.url} />
+          </div>
+        )}
+
+        {editedNote.context && (
+          <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <h4 className="text-sm font-medium text-indigo-900 mb-2 flex items-center gap-2">
+              💡 Contexto da Internet
+            </h4>
+            <p className="text-sm text-indigo-700 leading-relaxed">
+              {editedNote.context}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Footer hint - Desktop only */}
-      <div className="hidden md:block px-6 py-2 border-t border-slate-200 bg-slate-50">
+      {/* <div className="hidden md:block px-6 py-2 border-t border-slate-200 bg-slate-50">
         <p className="text-xs text-slate-500">
           ⌘/Ctrl + S para salvar • ESC para fechar{isEditMode ? ' • Alt+↑/↓ para mover linha' : ''}
         </p>
-      </div>
+      </div> */}
     </div>
   );
 }

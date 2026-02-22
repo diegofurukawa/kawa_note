@@ -199,9 +199,9 @@ export default function NoteCard({ note, onDelete, onUpdate, showFolderBadge = f
               </div>
             )}
             
-            <div className="flex items-center gap-2 mt-3 text-xs text-slate-400">
+            {/* <div className="flex items-center gap-2 mt-3 text-xs text-slate-400">
               <span>{format(new Date(note.createdAt), 'dd/MM/yyyy HH:mm')}</span>
-            </div>
+            </div> */}
           </div>
           
           <div className="flex items-center gap-1">

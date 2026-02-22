@@ -563,7 +563,7 @@ export default function Home() {
 
       {isMobile && (
         <MobileNoteStrip
-          tabs={activeNote ? [{ id: activeNote.id, title: activeNote.title || 'Sem título', type: 'note', note: activeNote }] : []}
+          tabs={filteredNotes.map(n => ({ id: n.id, title: n.title || 'Sem título', type: 'note', note: n }))}
           activeTab={activeNote ? { id: activeNote.id, title: activeNote.title || 'Sem título', type: 'note', note: activeNote } : null}
           onSelectTab={(tab) => {
             setActiveNote(tab.note);
