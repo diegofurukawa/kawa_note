@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Brain, Plus } from 'lucide-react';
+import { Brain, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NoteListItem from './NoteListItem';
 
@@ -28,6 +28,9 @@ import NoteListItem from './NoteListItem';
  * @param {Function} props.onSelectSearchResult - Called with (Note) on search result click
  * @param {Function} props.onNoteSaved - Called after QuickEditor creates a note
  * @param {string|null} props.folderId - Current folder ID for new notes via QuickEditor
+ * @param {boolean} [props.isLoadingMore] - True while background batch pages are loading
+ * @param {number} [props.totalLoaded] - Number of notes already loaded
+ * @param {number} [props.total] - Total notes reported by server
  * @returns {JSX.Element}
  */
 export default function NoteListPanel({
@@ -38,6 +41,9 @@ export default function NoteListPanel({
   onTogglePin,
   searchTerm,
   onNewNote,
+  isLoadingMore = false,
+  totalLoaded = 0,
+  total = 0,
 }) {
   const pinnedNotes = useMemo(() => notes.filter(n => n.pinned), [notes]);
   const regularNotes = useMemo(() => notes.filter(n => !n.pinned), [notes]);
@@ -63,6 +69,14 @@ export default function NoteListPanel({
 
       {/* Divider */}
       <div className="mx-3 border-t border-slate-100 shrink-0" />
+
+      {/* Loading more indicator — subtle footer shown during background batch loading */}
+      {isLoadingMore && (
+        <div className="px-3 py-1.5 shrink-0 flex items-center gap-1.5 text-xs text-slate-400">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Carregando mais {totalLoaded}/{total} notas...
+        </div>
+      )}
 
       {/* Note list — scrollable area */}
       <div className="flex-1 overflow-y-auto">

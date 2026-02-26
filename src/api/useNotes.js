@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notesApi } from './client';
 import { getKey } from '@/lib/keyManager';
@@ -232,17 +233,139 @@ export const useSearchNotes = (query, options = {}) => {
     queryKey: [NOTES_QUERY_KEY, 'search', query],
     queryFn: async () => {
       const response = await notesApi.search(query);
-      
+
       // Decrypt search results
       if (response.data && Array.isArray(response.data)) {
         response.data = await Promise.all(
           response.data.map(note => decryptNoteData(note))
         );
       }
-      
+
       return response;
     },
     enabled: !!query && query.length > 0,
     ...options
   });
 };
+
+const BATCH_LIMIT = 100;
+const BATCH_CONCURRENCY = 3;
+
+/**
+ * Hook to fetch ALL notes using transparent batch loading.
+ *
+ * Strategy:
+ * - Fetches page 1 (limit=100) immediately and exposes it while subsequent pages load.
+ * - If total > 100, fetches remaining pages in groups of 3 in parallel.
+ * - All filtering/search remains client-side (required by E2E encryption constraint).
+ *
+ * @returns {{
+ *   notes: Note[],
+ *   isLoading: boolean,
+ *   isLoadingMore: boolean,
+ *   totalLoaded: number,
+ *   total: number,
+ *   isComplete: boolean,
+ *   error: Error|null,
+ *   refetch: Function
+ * }}
+ */
+export function useAllNotes() {
+  const [notes, setNotes] = useState(/** @type {Note[]} */ ([]));
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [totalLoaded, setTotalLoaded] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+  const [error, setError] = useState(/** @type {Error|null} */ (null));
+  const runIdRef = useRef(0);
+
+  const fetchAll = async () => {
+    const runId = ++runIdRef.current;
+
+    setIsLoading(true);
+    setIsLoadingMore(false);
+    setIsComplete(false);
+    setError(null);
+
+    try {
+      // ── Page 1 ──────────────────────────────────────────────────────────
+      const firstResponse = await notesApi.list({ page: 1, limit: BATCH_LIMIT });
+
+      // Abort if a newer run has started
+      if (runId !== runIdRef.current) return;
+
+      const serverTotal = firstResponse.total ?? firstResponse.data?.length ?? 0;
+      const totalPages = firstResponse.totalPages ?? Math.ceil(serverTotal / BATCH_LIMIT) ?? 1;
+
+      const firstDecrypted = await Promise.all(
+        (firstResponse.data || []).map(note => decryptNoteData(note))
+      );
+
+      if (runId !== runIdRef.current) return;
+
+      setNotes(firstDecrypted);
+      setTotalLoaded(firstDecrypted.length);
+      setTotal(serverTotal);
+      setIsLoading(false);
+
+      if (totalPages <= 1) {
+        setIsComplete(true);
+        return;
+      }
+
+      // ── Pages 2..N in batches of BATCH_CONCURRENCY ───────────────────
+      setIsLoadingMore(true);
+
+      const remainingPages = [];
+      for (let p = 2; p <= totalPages; p++) remainingPages.push(p);
+
+      let accumulated = [...firstDecrypted];
+
+      for (let i = 0; i < remainingPages.length; i += BATCH_CONCURRENCY) {
+        if (runId !== runIdRef.current) return;
+
+        const batch = remainingPages.slice(i, i + BATCH_CONCURRENCY);
+        const batchResponses = await Promise.all(
+          batch.map(page => notesApi.list({ page, limit: BATCH_LIMIT }))
+        );
+
+        if (runId !== runIdRef.current) return;
+
+        const batchDecrypted = await Promise.all(
+          batchResponses.flatMap(res => (res.data || []).map(note => decryptNoteData(note)))
+        );
+
+        if (runId !== runIdRef.current) return;
+
+        accumulated = [...accumulated, ...batchDecrypted];
+        setNotes([...accumulated]);
+        setTotalLoaded(accumulated.length);
+      }
+
+      setIsLoadingMore(false);
+      setIsComplete(true);
+    } catch (err) {
+      if (runId !== runIdRef.current) return;
+      setError(err);
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return {
+    notes,
+    isLoading,
+    isLoadingMore,
+    totalLoaded,
+    total,
+    isComplete,
+    error,
+    refetch: fetchAll,
+  };
+}

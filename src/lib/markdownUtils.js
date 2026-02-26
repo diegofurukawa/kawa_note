@@ -107,25 +107,63 @@ export function toggleCheckbox(content, lineIndex) {
  *
  * @param {string} content - Note content
  * @param {number|null} cursorLineIndex - Zero-based line index where to insert after. If null, appends to end.
- * @returns {string} Updated content with new checkbox item inserted
+ * @returns {{ content: string, cursorPosition: number }} Updated content and character index where cursor should be placed
  */
 export function insertCheckboxItem(content, cursorLineIndex) {
   const newItem = '- [ ] ';
 
   if (!content || content.trim() === '') {
-    return newItem;
+    return { content: newItem, cursorPosition: newItem.length };
   }
 
   const lines = content.split('\n');
 
   if (cursorLineIndex === null || cursorLineIndex === undefined || cursorLineIndex >= lines.length) {
     // Append at end
-    return content + '\n' + newItem;
+    const newContent = content + '\n' + newItem;
+    return { content: newContent, cursorPosition: newContent.length };
   }
 
   // Insert after the specified line
   lines.splice(cursorLineIndex + 1, 0, newItem);
-  return lines.join('\n');
+  const newContent = lines.join('\n');
+
+  // Calculate character position: sum lengths of lines 0..cursorLineIndex (inclusive) + their newlines
+  let cursorPosition = 0;
+  for (let i = 0; i <= cursorLineIndex; i++) {
+    cursorPosition += lines[i].length + 1; // +1 for \n
+  }
+  cursorPosition += newItem.length; // end of the new "- [ ] " item
+
+  return { content: newContent, cursorPosition };
+}
+
+/**
+ * Detect if the line at the given index is a checkbox line (- [ ] or - [x]).
+ *
+ * @param {string} content - Note content
+ * @param {number} lineIndex - Zero-based line index to check
+ * @returns {boolean} True if the line is a checkbox line
+ */
+export function isCheckboxLine(content, lineIndex) {
+  if (!content) return false;
+  const lines = content.split('\n');
+  if (lineIndex < 0 || lineIndex >= lines.length) return false;
+  return /^- \[(x| )\]/i.test(lines[lineIndex]);
+}
+
+/**
+ * Check if a checkbox line at the given index is empty (no text after "- [ ] ").
+ *
+ * @param {string} content - Note content
+ * @param {number} lineIndex - Zero-based line index to check
+ * @returns {boolean} True if the line is a checkbox with no trailing text
+ */
+export function isEmptyCheckboxLine(content, lineIndex) {
+  if (!content) return false;
+  const lines = content.split('\n');
+  if (lineIndex < 0 || lineIndex >= lines.length) return false;
+  return /^- \[(x| )\]\s*$/i.test(lines[lineIndex]);
 }
 
 /**

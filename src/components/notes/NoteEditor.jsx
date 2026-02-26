@@ -16,6 +16,8 @@ import {
   insertCheckboxItem,
   moveLineUp,
   moveLineDown,
+  isCheckboxLine,
+  isEmptyCheckboxLine,
 } from '@/lib/markdownUtils';
 
 const typeColors = {
@@ -50,15 +52,36 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   const debounceTimerRef = useRef(null);
   const saveToastShownRef = useRef(false);
   const textareaRef = useRef(null);
+  const prevNoteIdRef = useRef(note.id);
 
   useEffect(() => {
+    const isSameNote = note.id === prevNoteIdRef.current;
+    prevNoteIdRef.current = note.id;
+
+    if (isSameNote && isDirty) {
+      // Same note refreshed from server while user is actively editing.
+      // Do not overwrite local edits or disrupt edit mode — the user's
+      // in-flight content takes precedence until the next auto-save cycle.
+      return;
+    }
+
+    if (isSameNote) {
+      // Same note, no pending edits (e.g. server refresh after auto-save completed).
+      // Update the note data but preserve edit mode so the user stays in context.
+      setEditedNote(note);
+      setError(null);
+      saveToastShownRef.current = false;
+      return;
+    }
+
+    // Different note selected → full reset.
     setEditedNote(note);
     setIsDirty(false);
     setSaveStatus('idle');
     setError(null);
     setIsEditMode(false);
     saveToastShownRef.current = false;
-  }, [note]);
+  }, [note]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Extract all unique tags from all notes for autocomplete
   const allTags = useMemo(() => {
@@ -201,10 +224,18 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   // F2 — Insert a new To-Do item
   const handleInsertTodo = useCallback(() => {
     if (!isEditMode) {
-      // Switch to edit mode and append
+      // Switch to edit mode and append at end
       setIsEditMode(true);
-      const newContent = insertCheckboxItem(editedNote.content, null);
+      const { content: newContent, cursorPosition } = insertCheckboxItem(editedNote.content, null);
       handleChange('content', newContent);
+      // Position cursor at the new checkbox line after edit mode activates
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      });
     } else {
       // In edit mode: insert at cursor position or at end
       const textarea = textareaRef.current;
@@ -214,12 +245,15 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
         const textBeforeCursor = editedNote.content.substring(0, cursorPos);
         cursorLineIndex = textBeforeCursor.split('\n').length - 1;
       }
-      const newContent = insertCheckboxItem(editedNote.content, cursorLineIndex);
+      const { content: newContent, cursorPosition } = insertCheckboxItem(editedNote.content, cursorLineIndex);
       handleChange('content', newContent);
-      // Focus textarea after insert
-      setTimeout(() => {
-        if (textareaRef.current) textareaRef.current.focus();
-      }, 50);
+      // Position cursor at the end of the new "- [ ] " item
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      });
     }
   }, [isEditMode, editedNote.content]);
 
@@ -268,9 +302,44 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   }, [editedNote.content, getCursorLineIndex, setCursorToLine]);
 
   // Keyboard shortcut handler for the textarea (Edit Mode)
-  // Handles: Alt+Up / Alt+Down (line move), Tab / Shift+Tab (indentation)
+  // Handles: Enter (To-Do mode), Alt+Up / Alt+Down (line move), Tab / Shift+Tab (indentation)
   const handleTextareaKeyDown = useCallback((e) => {
-    if (e.altKey && e.key === 'ArrowUp') {
+    if (e.key === 'Enter') {
+      const textarea = e.target;
+      const cursorPos = textarea.selectionStart;
+      const textBeforeCursor = editedNote.content.substring(0, cursorPos);
+      const cursorLineIndex = textBeforeCursor.split('\n').length - 1;
+
+      if (isCheckboxLine(editedNote.content, cursorLineIndex)) {
+        e.preventDefault();
+
+        if (isEmptyCheckboxLine(editedNote.content, cursorLineIndex)) {
+          // Empty checkbox → remove it and insert a normal line break (exit To-Do mode)
+          const lines = editedNote.content.split('\n');
+          lines[cursorLineIndex] = '';
+          const newContent = lines.join('\n');
+          handleChange('content', newContent);
+
+          // Calculate position: start of the now-empty line
+          let newPos = 0;
+          for (let i = 0; i < cursorLineIndex; i++) {
+            newPos += lines[i].length + 1;
+          }
+          requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(newPos, newPos);
+          });
+        } else {
+          // Checkbox with text → insert new "- [ ] " on next line
+          const { content: newContent, cursorPosition } = insertCheckboxItem(editedNote.content, cursorLineIndex);
+          handleChange('content', newContent);
+          requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(cursorPosition, cursorPosition);
+          });
+        }
+      }
+    } else if (e.altKey && e.key === 'ArrowUp') {
       e.preventDefault();
       handleMoveLineUp();
     } else if (e.altKey && e.key === 'ArrowDown') {

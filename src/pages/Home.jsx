@@ -9,7 +9,7 @@ import NoteDetailPanel from '../components/notes/NoteDetailPanel';
 import NoteEmptyPanel from '../components/notes/NoteEmptyPanel';
 import QuickEditor from '../components/notes/QuickEditor';
 import MoveNoteDialog from '../components/notes/MoveNoteDialog';
-import { useNotes } from '@/api/useNotes';
+import { useAllNotes } from '@/api/useNotes';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, ChevronLeft, ChevronRight, Lock, Menu } from 'lucide-react';
@@ -64,8 +64,7 @@ export default function Home() {
   const encryptionToastShown = useRef(false);
 
   // ─── Data fetching ────────────────────────────────────────────────────────
-  const { data: notesResponse = { data: [] }, isLoading, refetch } = useNotes();
-  const notes = notesResponse?.data || [];
+  const { notes, isLoading, isLoadingMore, totalLoaded, total, refetch } = useAllNotes();
 
   // ─── Auto-migration on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -194,12 +193,18 @@ export default function Home() {
     : notes.length;
 
   // ─── Active note lifecycle management ────────────────────────────────────
-  // If the active note is no longer in the filtered list (deleted/moved), clear it
+  // Keep activeNote in sync with the latest data from the server.
+  // - If the note was deleted/moved out of the filtered list → clear it.
+  // - If the note was updated (auto-save) → replace the stale object with the fresh one.
   useEffect(() => {
-    if (activeNote && !filteredNotes.find(n => n.id === activeNote.id)) {
+    if (!activeNote) return;
+    const fresh = notes.find(n => n.id === activeNote.id);
+    if (!fresh) {
       setActiveNote(null);
+    } else if (fresh !== activeNote) {
+      setActiveNote(fresh);
     }
-  }, [filteredNotes, activeNote]);
+  }, [notes, activeNote]);
 
   // ─── Note selection ───────────────────────────────────────────────────────
   const handleSelectNote = useCallback((note) => {
@@ -415,6 +420,9 @@ export default function Home() {
                   onSearchScopeChange={setSearchScope}
                   onSelectSearchResult={handleSelectNote}
                   onNewNote={handleNewNote}
+                  isLoadingMore={isLoadingMore}
+                  totalLoaded={totalLoaded}
+                  total={total}
                 />
               </div>
 
@@ -507,6 +515,9 @@ export default function Home() {
                       onSearchScopeChange={setSearchScope}
                       onSelectSearchResult={handleSelectNote}
                       onNewNote={handleNewNote}
+                      isLoadingMore={isLoadingMore}
+                      totalLoaded={totalLoaded}
+                      total={total}
                     />
                   </motion.div>
                 ) : (
