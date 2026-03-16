@@ -42,6 +42,7 @@ import IconPickerPopover from '@/components/folders/IconPickerPopover';
 import SubFolderCreateDialog from '@/components/folders/SubFolderCreateDialog';
 import { getFolderIcon } from '@/lib/folderIconHelper';
 import SearchBar from '@/components/notes/SearchBar';
+import ThemeToggle from './ThemeToggle';
 
 /** @typedef {import('@/types/models').Folder} Folder */
 /** @typedef {import('@/types/models').Note} Note */
@@ -103,20 +104,9 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
     }
   };
 
-  // Collect this folder's ID plus all descendant IDs to count notes recursively
-  const collectDescendantIds = (folderId, allFolderList) => {
-    const ids = new Set([folderId]);
-    const queue = [folderId];
-    while (queue.length > 0) {
-      const current = queue.shift();
-      allFolderList
-        .filter(f => f.parentFolderId === current)
-        .forEach(f => { ids.add(f.id); queue.push(f.id); });
-    }
-    return ids;
-  };
-  const descendantIds = collectDescendantIds(folder.id, allFolders);
-  const notesCount = notes.filter((/** @type {Note} */ n) => descendantIds.has(n.folderId)).length;
+  const notesCount = folder.computedCounts?.recursiveNotes
+    ?? folder._count?.notes
+    ?? notes.filter((/** @type {Note} */ n) => n.folderId === folder.id).length;
   const FolderIconComponent = getFolderIcon(folder.icon);
 
   if (isCollapsed) {
@@ -373,7 +363,7 @@ function SidebarContent({
               <Brain className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-900">Kawa Note</h1>
+              <h1 className="font-bold text-foreground">Kawa Note</h1>
             </div>
           </div>
         )}
@@ -584,23 +574,26 @@ function SidebarContent({
             </Tooltip>
           </TooltipProvider>
         ) : (
-          <div className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors">
-            <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0", getAvatarColor())}>
-              {getUserInitials()}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0", getAvatarColor())}>
+                {getUserInitials()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{user?.name || 'Usuário'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email || ''}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">{user?.name || 'Usuário'}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.email || ''}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-600"
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </Button>
+            <ThemeToggle />
           </div>
         )}
       </div>
@@ -702,7 +695,7 @@ export default function Sidebar({
   // Desktop: renderizar como sidebar permanente
   return (
     <div className={cn(
-      "h-screen bg-slate-50 border-r border-slate-200 flex flex-col transition-all duration-300",
+      "h-screen bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300",
       isCollapsed ? "w-16" : "w-64"
     )}>
       <SidebarContent

@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useSearchIndex } from '@/hooks/useSearchIndex';
 import { useNotes } from '@/api/useNotes';
+import { useRelationGraph } from '@/api/useRelations';
 import { format } from 'date-fns';
 
 export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChange, searchScope = 'folder', onSelectResult }) {
@@ -33,10 +34,12 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
   });
 
   const { data: notesResponse = { data: [] } } = useNotes();
+  const { data: relationGraphResponse = { data: { edges: [] } } } = useRelationGraph();
   const notes = notesResponse?.data || [];
+  const relations = relationGraphResponse?.data?.edges || [];
   
   // Usar hook de busca
-  const { search, isIndexing, indexedCount } = useSearchIndex(notes, []);
+  const { search, isIndexing, indexedCount } = useSearchIndex(notes, relations);
 
   // Filtrar resultados de busca
   const searchResults = useMemo(() => {
@@ -99,7 +102,7 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
           onChange={(e) => handleSearch(e.target.value)}
           onFocus={() => setIsSearchOpen(true)}
           placeholder="Buscar notas, contextos, relações..."
-          className="pl-10 pr-10 bg-white border-slate-200"
+          className="pl-10 pr-10 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
         />
         {searchTerm && (
           <Button
@@ -114,7 +117,7 @@ export default function SearchBar({ onSearch, onFilterChange, onSearchScopeChang
 
         {/* Search Results Dropdown */}
         {isSearchOpen && (searchTerm || searchHistory.length > 0) && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg z-50">
             {isIndexing && (
               <div className="p-3 flex items-center gap-2 text-sm text-slate-500">
                 <Loader2 className="w-4 h-4 animate-spin" />

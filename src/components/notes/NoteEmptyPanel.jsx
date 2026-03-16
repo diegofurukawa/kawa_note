@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 export default function NoteEmptyPanel() {
   return (
     <motion.div
-      className="flex-1 flex flex-col items-center justify-center h-full bg-slate-50 border-l border-slate-200"
+      className="flex-1 flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
@@ -30,17 +30,17 @@ export default function NoteEmptyPanel() {
         </div>
 
         {/* Heading */}
-        <h2 className="text-base font-semibold text-slate-700 mb-2">
+        <h2 className="text-base font-semibold text-slate-700 dark:text-slate-100 mb-2">
           Selecione uma nota
         </h2>
 
         {/* Subtext */}
-        <p className="text-sm text-slate-400 leading-relaxed">
+        <p className="text-sm text-slate-400 dark:text-slate-400 leading-relaxed">
           Escolha uma nota na lista à esquerda, ou crie uma nova para começar.
         </p>
 
         {/* Keyboard hint */}
-        <p className="mt-6 text-xs text-slate-300">
+        <p className="mt-6 text-xs text-slate-300 dark:text-slate-500">
           Ctrl + N para nova nota
         </p>
       </motion.div>

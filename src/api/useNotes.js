@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { notesApi } from './client';
+import { notesApi, relationsApi } from './client';
 import { getKey } from '@/lib/keyManager';
 import { encrypt, decrypt, encryptJSON, decryptJSON } from '@/lib/crypto';
 import { handleEncryptionError, checkAndHandleEncryptionError } from '@/lib/errorHandlers';
@@ -9,6 +9,121 @@ import { handleEncryptionError, checkAndHandleEncryptionError } from '@/lib/erro
 /** @typedef {import('@/types/api').ApiSuccessResponse} ApiSuccessResponse */
 
 const NOTES_QUERY_KEY = 'notes';
+const STOP_WORDS = new Set(['para', 'com', 'sem', 'uma', 'das', 'dos', 'que', 'por', 'the', 'and', 'como', 'mais', 'isso']);
+
+function tokenizeNote(note) {
+  const source = [
+    note.title,
+    note.content,
+    note.context,
+    note.url,
+    ...(Array.isArray(note.tags) ? note.tags : [])
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return new Set(
+    source
+      .split(/[^a-z0-9\u00C0-\u017F]+/i)
+      .filter((token) => token.length >= 4 && !STOP_WORDS.has(token))
+      .slice(0, 80)
+  );
+}
+
+function calculateSimilarity(sourceNote, candidateNote) {
+  const sourceTokens = tokenizeNote(sourceNote);
+  const candidateTokens = tokenizeNote(candidateNote);
+
+  if (sourceTokens.size === 0 || candidateTokens.size === 0) {
+    return 0;
+  }
+
+  const intersection = [...sourceTokens].filter((token) => candidateTokens.has(token)).length;
+  const union = new Set([...sourceTokens, ...candidateTokens]).size;
+  const sharedTags = (sourceNote.tags || []).filter((tag) => (candidateNote.tags || []).includes(tag)).length;
+  const urlDomainMatch = Boolean(sourceNote.url && candidateNote.url && (() => {
+    try {
+      return new URL(sourceNote.url).hostname === new URL(candidateNote.url).hostname;
+    } catch {
+      return false;
+    }
+  })());
+
+  return Math.min(0.95, (intersection / union) + sharedTags * 0.08 + (urlDomainMatch ? 0.12 : 0));
+}
+
+async function upsertNoteIntoCache(queryClient, updatedNote) {
+  const queries = queryClient.getQueriesData({ queryKey: [NOTES_QUERY_KEY] });
+
+  queries.forEach(([queryKey, queryData]) => {
+    if (!queryData?.data || !Array.isArray(queryData.data)) {
+      return;
+    }
+
+    const nextData = queryData.data.map((note) => (note.id === updatedNote.id ? { ...note, ...updatedNote } : note));
+    const hasNote = nextData.some((note) => note.id === updatedNote.id);
+
+    queryClient.setQueryData(queryKey, {
+      ...queryData,
+      data: hasNote ? nextData : [updatedNote, ...nextData]
+    });
+  });
+}
+
+async function suggestRelationsFromCache(queryClient, note) {
+  if (!note?.id) return;
+
+  const notesQueries = queryClient.getQueriesData({ queryKey: [NOTES_QUERY_KEY] });
+  const relationGraph = queryClient.getQueryData(['relations', 'graph']);
+  const existingEdges = relationGraph?.data?.edges || [];
+  const existingPairs = new Set(
+    existingEdges.map((edge) => [edge.source, edge.target].sort().join(':'))
+  );
+
+  const notes = notesQueries
+    .flatMap(([, queryData]) => (Array.isArray(queryData?.data) ? queryData.data : []))
+    .filter(Boolean);
+
+  const uniqueNotes = Array.from(new Map(notes.map((item) => [item.id, item])).values());
+
+  const candidates = uniqueNotes
+    .filter((candidate) => candidate.id !== note.id)
+    .map((candidate) => ({
+      candidate,
+      score: calculateSimilarity(note, candidate)
+    }))
+    .filter(({ score }) => score >= 0.18)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  await Promise.all(
+    candidates.map(async ({ candidate, score }) => {
+      const pairKey = [note.id, candidate.id].sort().join(':');
+      if (existingPairs.has(pairKey)) {
+        return;
+      }
+
+      existingPairs.add(pairKey);
+
+      try {
+        await relationsApi.create({
+          noteFromId: note.id,
+          noteToId: candidate.id,
+          relationType: 'semantic_suggested',
+          strength: Number(score.toFixed(2)),
+          context: 'Sugestao automatica por proximidade textual'
+        });
+      } catch (error) {
+        if (error?.status !== 400) {
+          console.warn('Falha ao sugerir relacao:', error);
+        }
+      }
+    })
+  );
+
+  queryClient.invalidateQueries({ queryKey: ['relations'] });
+}
 
 /**
  * Reset encryption logout flag (called on successful login)
@@ -96,7 +211,11 @@ async function decryptNoteData(note) {
       decrypted.context = await decrypt(note.context, key);
     }
     if (note.previewData) {
-      decrypted.previewData = await decryptJSON(note.previewData, key);
+      try {
+        decrypted.previewData = await decryptJSON(note.previewData, key);
+      } catch {
+        decrypted.previewData = JSON.parse(note.previewData);
+      }
     }
     if (note.tags) {
       // Tags stored as encrypted JSON string
@@ -147,7 +266,7 @@ export const useNotes = (filters = {}) => {
  * @param {string} id - Note ID
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiSuccessResponse<Note>>}
  */
-export const useNote = (id) => {
+export const useNote = (id, options = {}) => {
   return useQuery({
     queryKey: [NOTES_QUERY_KEY, id],
     queryFn: async () => {
@@ -161,7 +280,8 @@ export const useNote = (id) => {
       return response;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 5
+    staleTime: 1000 * 60 * 5,
+    ...options
   });
 };
 
@@ -178,8 +298,16 @@ export const useCreateNote = () => {
       const encrypted = await encryptNoteData(noteData);
       return notesApi.create(encrypted);
     },
-    onSuccess: () => {
+    onSuccess: async (response, variables) => {
+      const decrypted = response?.data ? await decryptNoteData(response.data) : null;
+
+      if (decrypted) {
+        await upsertNoteIntoCache(queryClient, decrypted);
+        await suggestRelationsFromCache(queryClient, decrypted);
+      }
+
       queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['relations'] });
       
       // Dispatch event for PWA install prompt trigger
       window.dispatchEvent(new Event('noteCreated'));
@@ -200,8 +328,40 @@ export const useUpdateNote = () => {
       const encrypted = await encryptNoteData(data);
       return notesApi.update(id, encrypted);
     },
-    onSuccess: (_, variables) => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: [NOTES_QUERY_KEY] });
+
+      const snapshots = queryClient.getQueriesData({ queryKey: [NOTES_QUERY_KEY] });
+      snapshots.forEach(([queryKey, queryData]) => {
+        if (!queryData?.data || !Array.isArray(queryData.data)) {
+          return;
+        }
+
+        queryClient.setQueryData(queryKey, {
+          ...queryData,
+          data: queryData.data.map((note) => (note.id === id ? { ...note, ...data } : note))
+        });
+      });
+
+      return { snapshots };
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshots?.forEach(([queryKey, snapshot]) => {
+        queryClient.setQueryData(queryKey, snapshot);
+      });
+    },
+    onSuccess: async (response, variables) => {
+      const decrypted = response?.data ? await decryptNoteData(response.data) : null;
+
+      if (decrypted) {
+        await upsertNoteIntoCache(queryClient, decrypted);
+        await suggestRelationsFromCache(queryClient, decrypted);
+      }
+
       queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY, variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['relations'] });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
     }
   });
@@ -295,8 +455,8 @@ export function useAllNotes() {
       // Abort if a newer run has started
       if (runId !== runIdRef.current) return;
 
-      const serverTotal = firstResponse.total ?? firstResponse.data?.length ?? 0;
-      const totalPages = firstResponse.totalPages ?? Math.ceil(serverTotal / BATCH_LIMIT) ?? 1;
+      const serverTotal = firstResponse.pagination?.total ?? firstResponse.total ?? firstResponse.data?.length ?? 0;
+      const totalPages = firstResponse.pagination?.totalPages ?? firstResponse.totalPages ?? Math.ceil(serverTotal / BATCH_LIMIT) ?? 1;
 
       const firstDecrypted = await Promise.all(
         (firstResponse.data || []).map(note => decryptNoteData(note))

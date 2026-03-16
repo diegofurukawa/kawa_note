@@ -8,6 +8,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import PageNotFound from '@/pages/PageNotFound';
 import { AuthProvider, useAuth } from '@/components/providers/AuthContext';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from '@/pages/Login';
 import Onboarding from '@/pages/Onboarding';
@@ -149,25 +150,27 @@ const AuthenticatedApp = () => {
 function App() {
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <NavigationTracker />
-          <InstallPrompt />
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginRoute />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <NavigationTracker />
+            <InstallPrompt />
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<LoginRoute />} />
 
-            {/* Onboarding route (requires authentication) */}
-            <Route path="/onboarding" element={<OnboardingRoute />} />
+              {/* Onboarding route (requires authentication) */}
+              <Route path="/onboarding" element={<OnboardingRoute />} />
 
-            {/* Protected routes */}
-            <Route path="/*" element={<AuthenticatedApp />} />
-          </Routes>
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+              {/* Protected routes */}
+              <Route path="/*" element={<AuthenticatedApp />} />
+            </Routes>
+          </Router>
+          <Toaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

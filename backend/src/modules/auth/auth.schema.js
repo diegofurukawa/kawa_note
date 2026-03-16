@@ -10,5 +10,6 @@ export const refreshTokenSchema = z.object({
 });
 
 export const encryptionSaltSchema = z.object({
-  encryptionSalt: z.string().min(1, 'Encryption salt is required')
+  encryptionSalt: z.string().min(1, 'Encryption salt is required'),
+  encryptionVerifier: z.string().min(1, 'Encryption verifier is required')
 });

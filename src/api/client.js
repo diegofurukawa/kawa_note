@@ -171,7 +171,8 @@ export const authApi = {
   me: () => apiClient.get('/auth/me'),
   logout: () => apiClient.post('/auth/logout'),
   refresh: (refreshToken) => apiClient.post('/auth/refresh', { refreshToken }),
-  updateEncryptionSalt: (encryptionSalt) => apiClient.put('/auth/encryption-salt', { encryptionSalt })
+  updateEncryptionSalt: (encryptionSalt, encryptionVerifier) =>
+    apiClient.put('/auth/encryption-salt', { encryptionSalt, encryptionVerifier })
 };
 
 /**

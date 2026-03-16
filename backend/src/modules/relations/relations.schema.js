@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const relationTypeEnum = z.enum(['semantic', 'manual', 'reference', 'temporal']);
+const relationTypeEnum = z.enum(['semantic', 'semantic_suggested', 'manual', 'reference', 'temporal']);
 
 export const createRelationSchema = z.object({
   noteFromId: z.string().uuid('Invalid source note ID'),

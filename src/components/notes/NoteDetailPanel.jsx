@@ -1,4 +1,6 @@
 import NoteEditor from './NoteEditor';
+import { useNote } from '@/api/useNotes';
+import RelatedNotes from './RelatedNotes';
 
 /** @typedef {import('@/types/models').Note} Note */
 
@@ -14,19 +16,25 @@ import NoteEditor from './NoteEditor';
  * @param {Function} props.onMoveNote - Called with (note) to open MoveNoteDialog
  * @returns {JSX.Element}
  */
-export default function NoteDetailPanel({ note, onUpdate, onDelete, onMoveNote }) {
+export default function NoteDetailPanel({ note, onUpdate, onDelete: _onDelete, onMoveNote, allNotes = [] }) {
+  const { data: noteResponse } = useNote(note?.id, {
+    refetchInterval: note?.metadataStatus === 'queued' || note?.metadataStatus === 'processing' ? 3000 : false
+  });
+  const currentNote = noteResponse?.data || note;
+
   return (
-    <div className="flex flex-col h-full bg-white min-w-0">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950 min-w-0">
       <div className="flex-1 overflow-hidden">
         <NoteEditor
-          key={note.id}
-          note={note}
+          note={currentNote}
           mode="panel"
           onSave={onUpdate}
           onClose={() => {}}
           onMoveNote={onMoveNote}
+          allNotes={allNotes}
         />
       </div>
+      <RelatedNotes currentNote={currentNote} />
     </div>
   );
 }

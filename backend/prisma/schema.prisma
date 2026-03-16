@@ -101,6 +101,7 @@ model User {
   name           String?
   tenantId       String?  @map("tenant_id") @db.VarChar(64)
   encryptionSalt String?  @map("encryption_salt")
+  encryptionVerifier String? @map("encryption_verifier") @db.Text
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -165,6 +166,8 @@ model Note {
   previewData String?  @map("preview_data") @db.Text
   tags        String   @default("") @db.Text
   context     String?  @db.Text
+  metadataStatus   String    @default("idle") @map("metadata_status")
+  metadataFetchedAt DateTime? @map("metadata_fetched_at")
   isEncrypted Boolean  @default(true) @map("is_encrypted")
   pinned      Boolean  @default(false)
   folderId    String?  @map("folder_id")
@@ -187,7 +190,7 @@ model Relation {
   id           String   @id @default(dbgenerated("gen_random_uuid()"))
   noteFromId   String   @map("note_from_id")
   noteToId     String   @map("note_to_id")
-  relationType String   @default("semantic") @map("relation_type") // semantic, manual, reference, temporal
+  relationType String   @default("semantic") @map("relation_type") // semantic, semantic_suggested, manual, reference, temporal
   strength     Float    @default(0.5)
   context      String?
   tenantId     String   @map("tenant_id") @db.VarChar(64)

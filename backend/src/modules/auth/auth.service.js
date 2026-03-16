@@ -60,6 +60,7 @@ export const authService = {
         name: user.name,
         tenantId: user.tenantId,
         encryptionSalt: user.encryptionSalt,
+        encryptionVerifier: user.encryptionVerifier,
         createdAt: user.createdAt
       },
       ...tokens
@@ -75,6 +76,7 @@ export const authService = {
         name: true,
         tenantId: true,
         encryptionSalt: true,
+        encryptionVerifier: true,
         createdAt: true
       }
     });
@@ -135,16 +137,17 @@ export const authService = {
     }
   },
 
-  async updateEncryptionSalt(userId, encryptionSalt) {
+  async updateEncryptionSalt(userId, encryptionSalt, encryptionVerifier) {
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { encryptionSalt },
+      data: { encryptionSalt, encryptionVerifier },
       select: {
         id: true,
         email: true,
         name: true,
         tenantId: true,
         encryptionSalt: true,
+        encryptionVerifier: true,
         createdAt: true
       }
     });

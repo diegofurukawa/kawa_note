@@ -1,4 +1,36 @@
 import { prisma } from '../../config/database.js';
+import { buildNoteScalarSelect, supportsNoteMetadataColumns } from '../notes/notes.compat.js';
+
+function buildComputedCounts(folderMap, folderId) {
+  const node = folderMap.get(folderId);
+  if (!node) {
+    return {
+      directNotes: 0,
+      directSubfolders: 0,
+      recursiveNotes: 0,
+      recursiveSubfolders: 0
+    };
+  }
+
+  let recursiveNotes = node._count?.notes || 0;
+  let recursiveSubfolders = node._count?.subFolders || 0;
+
+  node.children.forEach((child) => {
+    const childCounts = buildComputedCounts(folderMap, child.id);
+    recursiveNotes += childCounts.recursiveNotes;
+    recursiveSubfolders += childCounts.recursiveSubfolders;
+  });
+
+  const computedCounts = {
+    directNotes: node._count?.notes || 0,
+    directSubfolders: node._count?.subFolders || 0,
+    recursiveNotes,
+    recursiveSubfolders
+  };
+
+  node.computedCounts = computedCounts;
+  return computedCounts;
+}
 
 export const foldersService = {
   async listFolders(userId, tenantId, parentId = null) {
@@ -59,6 +91,10 @@ export const foldersService = {
       }
     });
 
+    rootFolders.forEach((rootFolder) => {
+      buildComputedCounts(folderMap, rootFolder.id);
+    });
+
     return rootFolders;
   },
 
@@ -99,6 +135,23 @@ export const foldersService = {
         }
       }
     });
+
+    if (folder) {
+      const hierarchy = await this.getFolderHierarchy(userId, tenantId);
+      const allNodes = [];
+      const stack = [...hierarchy];
+
+      while (stack.length > 0) {
+        const current = stack.pop();
+        allNodes.push(current);
+        current.children?.forEach((child) => stack.push(child));
+      }
+
+      const hierarchyMatch = allNodes.find((item) => item.id === folder.id);
+      if (hierarchyMatch?.computedCounts) {
+        folder.computedCounts = hierarchyMatch.computedCounts;
+      }
+    }
 
     return folder;
   },
@@ -220,6 +273,7 @@ export const foldersService = {
   async getFolderNotes(userId, tenantId, folderId, options = {}) {
     const { page = 1, limit = 20 } = options;
     const skip = (page - 1) * limit;
+    const includeMetadata = await supportsNoteMetadataColumns();
 
     const folder = await prisma.folder.findFirst({
       where: {
@@ -245,7 +299,8 @@ export const foldersService = {
         orderBy: [
           { pinned: 'desc' },
           { updatedAt: 'desc' }
-        ]
+        ],
+        select: buildNoteScalarSelect(includeMetadata)
       }),
       prisma.note.count({
         where: {

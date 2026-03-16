@@ -3,6 +3,7 @@ import { appParams, setAppToken } from '@/lib/app-params';
 import { apiClient } from '@/api/client';
 import { resetEncryptionLogoutFlag } from '@/api/useNotes';
 import { clearKey } from '@/lib/keyManager';
+import { validateEncryptionVerifier } from '@/lib/crypto';
 
 const AuthContext = createContext(null);
 
@@ -212,7 +213,18 @@ export const AuthProvider = ({ children }) => {
 
       console.log('🔐 AuthContext.unlock: Deriving encryption key...');
       const { initializeEncryption } = await import('@/lib/keyManager');
-      await initializeEncryption(password, user.encryptionSalt);
+      const key = await initializeEncryption(password, user.encryptionSalt);
+
+      if (!user.encryptionVerifier) {
+        clearKey();
+        throw new Error('Encryption verifier not available for this user');
+      }
+
+      const isValidPassword = await validateEncryptionVerifier(user.encryptionVerifier, key);
+      if (!isValidPassword) {
+        clearKey();
+        throw new Error('Invalid unlock password');
+      }
       
       console.log('✅ AuthContext.unlock: Encryption key derived successfully');
       setIsEncryptionReady(true);

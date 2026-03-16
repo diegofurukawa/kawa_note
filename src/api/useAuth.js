@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from './client';
 import { initializeEncryption, clearKey } from '@/lib/keyManager';
-import { generateSalt } from '@/lib/crypto';
+import { createEncryptionVerifier, generateSalt } from '@/lib/crypto';
 import { setAppToken } from '@/lib/app-params';
 
 const AUTH_QUERY_KEY = 'auth';
@@ -48,21 +48,28 @@ export const useLogin = () => {
       console.log('✅ useLogin: User data received');
       
       let salt = user.encryptionSalt;
+      let verifier = user.encryptionVerifier;
       console.log('🔑 useLogin: Encryption salt:', salt ? 'EXISTS' : 'NULL - will generate');
       
       // First login: generate and save salt
       if (!salt) {
         console.log('🔑 useLogin: Generating new encryption salt...');
         salt = await generateSalt();
-        console.log('💾 useLogin: Saving encryption salt to backend...');
-        await authApi.updateEncryptionSalt(salt);
-        console.log('✅ useLogin: Encryption salt saved');
       }
       
       // Derive encryption key
       console.log('🔐 useLogin: Deriving encryption key from password...');
-      await initializeEncryption(credentials.password, salt);
+      const key = await initializeEncryption(credentials.password, salt);
       console.log('✅ useLogin: Encryption key initialized successfully');
+
+      // Backfill verifier for existing users and persist new salt/verifier on first login.
+      if (!verifier) {
+        console.log('🔐 useLogin: Generating encryption verifier...');
+        verifier = await createEncryptionVerifier(key);
+        console.log('💾 useLogin: Saving encryption config to backend...');
+        await authApi.updateEncryptionSalt(salt, verifier);
+        console.log('✅ useLogin: Encryption config saved');
+      }
       
       return response;
     },

@@ -81,7 +81,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="login-light min-h-screen flex">
       {/* Left side - form */}
       <div className="flex-1 flex items-center justify-center bg-white px-8 py-12 lg:px-16">
         <div className="w-full max-w-sm">
@@ -108,6 +108,7 @@ export default function Login() {
                 placeholder="seu@email.com"
                 {...register('email')}
                 disabled={loginMutation.isPending}
+                className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
               />
               {errors.email && (
                 <p className="text-xs text-red-500">{errors.email.message}</p>
@@ -126,7 +127,7 @@ export default function Login() {
                   placeholder="••••••••"
                   {...register('password')}
                   disabled={loginMutation.isPending}
-                  className="pr-10"
+                  className="pr-10 bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
                 <button
                   type="button"

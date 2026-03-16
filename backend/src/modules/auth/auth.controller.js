@@ -66,7 +66,11 @@ export const authController = {
   async updateEncryptionSalt(request, reply) {
     try {
       const data = encryptionSaltSchema.parse(request.body);
-      const user = await authService.updateEncryptionSalt(request.user.id, data.encryptionSalt);
+      const user = await authService.updateEncryptionSalt(
+        request.user.id,
+        data.encryptionSalt,
+        data.encryptionVerifier
+      );
       return reply.send(successResponse(user, 'Encryption salt updated successfully'));
     } catch (error) {
       throw error;

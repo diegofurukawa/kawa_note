@@ -10,6 +10,7 @@ export const createNoteSchema = z.object({
   previewData: z.string().optional().nullable(), // Now encrypted string
   tags: z.string().default(''), // Now encrypted string
   context: z.string().optional().nullable(),
+  metadataStatus: z.enum(['idle', 'queued', 'processing', 'ready', 'failed']).optional(),
   isEncrypted: z.boolean().default(true),
   pinned: z.boolean().default(false),
   folderId: z.string().uuid().optional().nullable()
@@ -23,6 +24,7 @@ export const updateNoteSchema = z.object({
   previewData: z.string().optional().nullable(), // Now encrypted string
   tags: z.string().optional(), // Now encrypted string
   context: z.string().optional().nullable(),
+  metadataStatus: z.enum(['idle', 'queued', 'processing', 'ready', 'failed']).optional(),
   isEncrypted: z.boolean().optional(),
   pinned: z.boolean().optional(),
   folderId: z.string().uuid().optional().nullable()

@@ -189,7 +189,7 @@ export default function Home() {
   const folderNoteCount = selectedFolder
     ? selectedFolder.virtual
       ? notes.filter(n => !n.folderId).length
-      : notes.filter(n => selectedFolderIds.has(n.folderId)).length
+      : (selectedFolder.computedCounts?.recursiveNotes ?? notes.filter(n => selectedFolderIds.has(n.folderId)).length)
     : notes.length;
 
   // ─── Active note lifecycle management ────────────────────────────────────
@@ -301,7 +301,7 @@ export default function Home() {
   const LIST_PANEL_WIDTH = 'w-[320px] min-w-[240px]';
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className="flex h-screen bg-white dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100">
       {/* Sidebar — Desktop only, or Mobile drawer */}
       <Sidebar
         selectedFolder={selectedFolder}
@@ -325,7 +325,7 @@ export default function Home() {
       <div className={`flex-1 flex flex-col overflow-hidden ${isMobile ? (activeNote ? 'pb-28' : 'pb-16') : 'pb-0'}`}>
 
         {/* ── Top header ── */}
-        <div className="border-b border-slate-200 bg-white shrink-0">
+        <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shrink-0">
           {/* Migration Banner */}
           {migrationStatus === 'running' && (
             <div className="mx-3 md:mx-6 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
@@ -367,7 +367,7 @@ export default function Home() {
             )}
 
             <div className="shrink-0">
-              <h1 className="text-xl font-bold text-slate-900 leading-tight">
+              <h1 className="text-xl font-bold text-foreground leading-tight">
                 {isGlobalSearch ? 'Pesquisa Global' : (selectedFolder ? selectedFolder.name : 'Todas as Notas')}
               </h1>
               <p className="text-xs text-slate-500">
@@ -472,6 +472,7 @@ export default function Home() {
                         onUpdate={refetch}
                         onDelete={handleDeleteNote}
                         onMoveNote={setNoteToMove}
+                        allNotes={notes}
                       />
                     </motion.div>
                   ) : (
@@ -554,6 +555,7 @@ export default function Home() {
                         onUpdate={refetch}
                         onDelete={handleDeleteNote}
                         onMoveNote={setNoteToMove}
+                        allNotes={notes}
                       />
                     )}
                   </motion.div>

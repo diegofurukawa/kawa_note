@@ -64,7 +64,7 @@ export default function Header({
         )}
 
         <div className="shrink-0">
-          <h1 className="text-xl font-bold text-slate-900 leading-tight">
+          <h1 className="text-xl font-bold text-foreground leading-tight">
             {title}
           </h1>
           <p className="text-xs text-slate-500">

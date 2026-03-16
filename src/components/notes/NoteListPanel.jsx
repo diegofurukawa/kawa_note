@@ -51,7 +51,7 @@ export default function NoteListPanel({
   const isEmpty = notes.length === 0;
 
   return (
-    <div className="flex flex-col h-full border-r border-slate-200 bg-white overflow-hidden">
+    <div className="flex flex-col h-full border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
 
       {/* New Note button — creation happens in the right panel */}
       <div className="px-3 pt-2 pb-2 shrink-0">

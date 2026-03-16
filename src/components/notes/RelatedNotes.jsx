@@ -1,125 +1,94 @@
-import React, { useEffect, useState } from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Network, TrendingUp } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRelatedNotes } from '@/api/useRelations';
+import { Button } from "@/components/ui/button";
+import { Check, Link2, Sparkles, Trash2 } from "lucide-react";
+import { useDeleteRelation, useRelatedNotes, useUpdateRelation } from '@/api/useRelations';
 
-export default function RelatedNotes({ currentNote, allNotes }) {
-  const [relatedNotes, setRelatedNotes] = useState([]);
+export default function RelatedNotes({ currentNote }) {
   const { data: relationsResponse = { data: [] } } = useRelatedNotes(currentNote?.id);
+  const updateRelationMutation = useUpdateRelation();
+  const deleteRelationMutation = useDeleteRelation();
   const relations = relationsResponse?.data || [];
 
-  useEffect(() => {
-    if (!currentNote || !relations.length) {
-      setRelatedNotes([]);
-      return;
-    }
-
-    // Encontrar relações onde a nota atual é origem ou destino
-    const relevantRelations = relations.filter(
-      r => r.noteFromId === currentNote.id || r.noteToId === currentNote.id
-    );
-    
-    // Buscar notas relacionadas
-    const relatedNoteIds = relevantRelations.map(r => 
-      r.noteFromId === currentNote.id ? r.noteToId : r.noteFromId
-    );
-    
-    const related = allNotes.filter(n => relatedNoteIds.includes(n.id));
-    setRelatedNotes(related);
-  }, [currentNote, relations, allNotes]);
-
-  // Encontrar notas semanticamente relacionadas (mesmo sem relação explícita)
-  const findSemanticMatches = () => {
-    if (!currentNote || !allNotes.length) return [];
-    
-    const currentWords = new Set(
-      currentNote.content.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-    );
-    
-    return allNotes
-      .filter(n => n.id !== currentNote.id && !relatedNotes.find(rn => rn.id === n.id))
-      .map(note => {
-        const noteWords = new Set(
-          note.content.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-        );
-        const intersection = new Set([...currentWords].filter(x => noteWords.has(x)));
-        const similarity = intersection.size / Math.max(currentWords.size, noteWords.size);
-        
-        return { note, similarity };
-      })
-      .filter(({ similarity }) => similarity > 0.2)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 3);
-  };
-
-  const semanticMatches = findSemanticMatches();
-
-  if (!currentNote || (relatedNotes.length === 0 && semanticMatches.length === 0)) {
+  if (!currentNote || relations.length === 0) {
     return null;
   }
 
+  const explicitRelations = relations.filter((relation) => relation.relationType !== 'semantic_suggested');
+  const suggestedRelations = relations.filter((relation) => relation.relationType === 'semantic_suggested');
+
   return (
-    <div className="space-y-4">
-      {relatedNotes.length > 0 && (
-        <Card className="p-4 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+    <div className="space-y-4 p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50">
+      {suggestedRelations.length > 0 && (
+        <Card className="p-4 bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900">
           <div className="flex items-center gap-2 mb-3">
-            <Network className="w-4 h-4 text-indigo-600" />
-            <h3 className="font-medium text-sm text-slate-900">Notas Relacionadas</h3>
-            <Badge variant="secondary" className="ml-auto">
-              {relatedNotes.length}
-            </Badge>
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Sugestoes de relacao</h3>
+            <Badge variant="secondary" className="ml-auto">{suggestedRelations.length}</Badge>
           </div>
-          
+
           <div className="space-y-2">
-            <AnimatePresence>
-              {relatedNotes.map((note) => (
-                <motion.div
-                  key={note.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="p-2 bg-white rounded-lg border border-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm font-medium text-slate-900 line-clamp-1">
-                    {note.title}
-                  </p>
-                  <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                    {note.content}
-                  </p>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {suggestedRelations.map((relation) => (
+              <div key={relation.relationId} className="rounded-lg border border-amber-100 dark:border-amber-900/60 p-3 bg-amber-50/60 dark:bg-amber-950/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{relation.note?.title || 'Sem titulo'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+                      {relation.context || relation.note?.content || 'Sugestao por proximidade textual'}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">{Math.round((relation.strength || 0) * 100)}%</Badge>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => updateRelationMutation.mutate({ id: relation.relationId, data: { relationType: 'semantic' } })}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Confirmar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteRelationMutation.mutate(relation.relationId)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    Descartar
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}
-      
-      {semanticMatches.length > 0 && (
-        <Card className="p-4 bg-gradient-to-br from-amber-50 to-white border-amber-100">
+
+      {explicitRelations.length > 0 && (
+        <Card className="p-4 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-4 h-4 text-amber-600" />
-            <h3 className="font-medium text-sm text-slate-900">Pode ter relação</h3>
+            <Link2 className="w-4 h-4 text-indigo-500" />
+            <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Relacionamentos ativos</h3>
+            <Badge variant="secondary" className="ml-auto">{explicitRelations.length}</Badge>
           </div>
-          
+
           <div className="space-y-2">
-            {semanticMatches.map(({ note, similarity }) => (
-              <div
-                key={note.id}
-                className="p-2 bg-white rounded-lg border border-amber-100 hover:border-amber-300 transition-colors cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 line-clamp-1">
-                      {note.title}
-                    </p>
-                    <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                      {note.content}
+            {explicitRelations.map((relation) => (
+              <div key={relation.relationId} className="rounded-lg border border-slate-100 dark:border-slate-800 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{relation.note?.title || 'Sem titulo'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {relation.relationType} • {Math.round((relation.strength || 0) * 100)}%
                     </p>
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    {Math.round(similarity * 100)}%
-                  </Badge>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => deleteRelationMutation.mutate(relation.relationId)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
             ))}

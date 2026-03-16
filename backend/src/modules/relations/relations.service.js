@@ -1,4 +1,5 @@
 import { prisma } from '../../config/database.js';
+import { buildNoteScalarSelect, supportsNoteMetadataColumns } from '../notes/notes.compat.js';
 
 export const relationsService = {
   async listRelations(userId, tenantId, options = {}) {
@@ -49,13 +50,16 @@ export const relationsService = {
   },
 
   async getRelatedNotes(userId, tenantId, noteId) {
+    const includeMetadata = await supportsNoteMetadataColumns();
+
     // Verify note exists and belongs to user/tenant
     const note = await prisma.note.findFirst({
       where: {
         id: noteId,
         userId,
         tenantId
-      }
+      },
+      select: buildNoteScalarSelect(includeMetadata)
     });
 
     if (!note) {
@@ -77,7 +81,8 @@ export const relationsService = {
             title: true,
             type: true,
             content: true,
-            tags: true
+            tags: true,
+            isEncrypted: true
           }
         },
         noteTo: {
@@ -86,7 +91,8 @@ export const relationsService = {
             title: true,
             type: true,
             content: true,
-            tags: true
+            tags: true,
+            isEncrypted: true
           }
         }
       }
@@ -111,6 +117,8 @@ export const relationsService = {
   },
 
   async createRelation(userId, tenantId, data) {
+    const includeMetadata = await supportsNoteMetadataColumns();
+
     // Verify both notes exist and belong to user/tenant
     const [noteFrom, noteTo] = await Promise.all([
       prisma.note.findFirst({
@@ -118,14 +126,16 @@ export const relationsService = {
           id: data.noteFromId,
           userId,
           tenantId
-        }
+        },
+        select: buildNoteScalarSelect(includeMetadata)
       }),
       prisma.note.findFirst({
         where: {
           id: data.noteToId,
           userId,
           tenantId
-        }
+        },
+        select: buildNoteScalarSelect(includeMetadata)
       })
     ]);
 
@@ -142,12 +152,19 @@ export const relationsService = {
     }
 
     // Check if relation already exists
-    const existingRelation = await prisma.relation.findUnique({
+    const existingRelation = await prisma.relation.findFirst({
       where: {
-        noteFromId_noteToId: {
-          noteFromId: data.noteFromId,
-          noteToId: data.noteToId
-        }
+        tenantId,
+        OR: [
+          {
+            noteFromId: data.noteFromId,
+            noteToId: data.noteToId
+          },
+          {
+            noteFromId: data.noteToId,
+            noteToId: data.noteFromId
+          }
+        ]
       }
     });
 

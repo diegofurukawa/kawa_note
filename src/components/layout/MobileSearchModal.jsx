@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
 import { useSearchIndex } from '@/hooks/useSearchIndex';
 import { useNotes } from '@/api/useNotes';
+import { useRelationGraph } from '@/api/useRelations';
 import { format } from 'date-fns';
 
 /**
@@ -22,8 +23,10 @@ export default function MobileSearchModal({ open, onClose, onSelectResult }) {
   const inputRef = useRef(null);
 
   const { data: notesResponse = { data: [] } } = useNotes();
+  const { data: relationGraphResponse = { data: { edges: [] } } } = useRelationGraph();
   const notes = notesResponse?.data || [];
-  const { search, isIndexing, indexedCount } = useSearchIndex(notes, []);
+  const relations = relationGraphResponse?.data?.edges || [];
+  const { search, isIndexing, indexedCount } = useSearchIndex(notes, relations);
 
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];

@@ -102,7 +102,7 @@ export default function QuickEditor({ onNoteSaved, folderId = null, fullHeight =
 
   return (
     <motion.div
-      className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"
+      className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
       initial={false}
       animate={{ height: (isExpanded || fullHeight) ? 'auto' : '56px' }}
     >

@@ -1,5 +1,5 @@
 import { notesService } from './notes.service.js';
-import { successResponse, errorResponse } from '../../utils/response.js';
+import { successResponse, errorResponse, paginatedResponse } from '../../utils/response.js';
 import { 
   createNoteSchema, 
   updateNoteSchema, 
@@ -11,7 +11,7 @@ export const notesController = {
   async list(request, reply) {
     const filters = listNotesQuerySchema.parse(request.query);
     const result = await notesService.listNotes(request.user.id, request.user.tenantId, filters);
-    return reply.send(successResponse(result.notes, 'Notes retrieved successfully'));
+    return reply.send(paginatedResponse(result.notes, result.pagination));
   },
 
   async getById(request, reply) {

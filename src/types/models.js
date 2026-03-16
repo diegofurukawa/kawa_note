@@ -8,6 +8,8 @@
  * @property {string} [previewData] - Preview data (JSON string)
  * @property {string[]} [tags] - Array of tags
  * @property {string} [context] - Internet context
+ * @property {'idle' | 'queued' | 'processing' | 'ready' | 'failed'} [metadataStatus] - URL metadata enrichment status
+ * @property {Date | string} [metadataFetchedAt] - Metadata fetch timestamp
  * @property {boolean} [isEncrypted] - Whether note is encrypted
  * @property {boolean} [pinned] - Whether note is pinned
  * @property {string} [folderId] - Parent folder ID
@@ -30,6 +32,11 @@
  * @property {Object} [_count] - Count of related items (optional include)
  * @property {number} [_count.notes] - Number of notes in folder
  * @property {number} [_count.subfolders] - Number of subfolders
+ * @property {Object} [computedCounts] - Backend-computed recursive counts
+ * @property {number} [computedCounts.directNotes] - Direct note count
+ * @property {number} [computedCounts.directSubfolders] - Direct subfolder count
+ * @property {number} [computedCounts.recursiveNotes] - Recursive note count
+ * @property {number} [computedCounts.recursiveSubfolders] - Recursive subfolder count
  */
 
 /**
@@ -37,7 +44,7 @@
  * @property {string} id - Unique identifier
  * @property {string} noteFromId - Source note ID
  * @property {string} noteToId - Target note ID
- * @property {'reference' | 'related' | 'duplicate' | 'child'} [relationType] - Type of relation
+ * @property {'semantic' | 'semantic_suggested' | 'manual' | 'reference' | 'temporal'} [relationType] - Type of relation
  * @property {number} [strength] - Relation strength (0-1)
  * @property {string} [context] - Relation context
  * @property {Date} createdAt - Creation timestamp

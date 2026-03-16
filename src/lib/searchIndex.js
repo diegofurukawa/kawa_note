@@ -4,6 +4,16 @@
 
 import Fuse from 'fuse.js';
 
+function normalizePreviewData(previewData) {
+  if (!previewData) return {};
+
+  try {
+    return typeof previewData === 'string' ? JSON.parse(previewData) : previewData;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Cria e gerencia um índice de busca Fuse.js
  */
@@ -22,8 +32,19 @@ export class SearchIndex {
     // Enriquecer notas com dados de relações
     const enrichedNotes = this.notes.map(note => {
       const relatedNotes = this.getRelatedNotes(note.id);
+      const previewData = normalizePreviewData(note.previewData);
+
       return {
         ...note,
+        searchContext: [
+          note.context,
+          note.url,
+          previewData.title,
+          previewData.description,
+          previewData.ogSiteName,
+          previewData.domain,
+          ...(Array.isArray(note.tags) ? note.tags : [])
+        ].filter(Boolean).join(' '),
         relatedNoteIds: relatedNotes.map(r => r.id),
         relationStrengths: relatedNotes.map(r => r.strength)
       };
@@ -32,9 +53,10 @@ export class SearchIndex {
     // Configurar Fuse.js
     const options = {
       keys: [
-        { name: 'title', weight: 0.5 },
+        { name: 'title', weight: 0.38 },
         { name: 'content', weight: 0.3 },
-        { name: 'tags', weight: 0.2 }
+        { name: 'tags', weight: 0.16 },
+        { name: 'searchContext', weight: 0.16 }
       ],
       threshold: 0.4,
       includeScore: true,
@@ -129,7 +151,9 @@ export class SearchIndex {
         if (relatedNote) {
           related.push({
             id: relatedNote.id,
-            strength: relation.strength || 0.5
+            strength: relation.strength || 0.5,
+            context: relation.context || '',
+            relationType: relation.relationType || 'semantic'
           });
         }
       } else if (relation.noteToId === noteId) {
@@ -137,7 +161,9 @@ export class SearchIndex {
         if (relatedNote) {
           related.push({
             id: relatedNote.id,
-            strength: relation.strength || 0.5
+            strength: relation.strength || 0.5,
+            context: relation.context || '',
+            relationType: relation.relationType || 'semantic'
           });
         }
       }

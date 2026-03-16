@@ -2,8 +2,9 @@
  * @typedef {Object} ApiSuccessResponse
  * @template T
  * @property {boolean} success - Always true for success responses
- * @property {string} message - Success message
+ * @property {string} [message] - Success message
  * @property {T} data - Response data
+ * @property {{ page: number, limit: number, total: number, totalPages: number }} [pagination] - Pagination payload when available
  */
 
 /**

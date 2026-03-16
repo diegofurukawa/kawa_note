@@ -24,7 +24,11 @@ export function UnlockScreen() {
     try {
       const result = await unlock(password);
       if (!result.success) {
-        setError('Senha incorreta. Tente novamente.');
+        if (result.error?.message === 'Encryption verifier not available for this user') {
+          setError('Sua sessao precisa ser renovada. Clique em sair e entre novamente para validar sua senha.');
+        } else {
+          setError('Senha incorreta. Tente novamente.');
+        }
         setPassword('');
       }
     } catch (err) {
@@ -41,7 +45,7 @@ export function UnlockScreen() {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center z-50">
+    <div className="login-light fixed inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center z-50">
       {/* Shimmer effect during unlock */}
       {isLoading && (
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
@@ -88,7 +92,7 @@ export function UnlockScreen() {
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
               autoFocus
-              className="border-slate-300"
+              className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
             />
           </div>
 
@@ -114,7 +118,7 @@ export function UnlockScreen() {
             variant="outline"
             onClick={handleLogout}
             disabled={isLoading}
-            className="w-full border-slate-300 text-slate-700 hover:bg-slate-50"
+            className="w-full border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
           >
             <LogOut className="w-4 h-4 mr-2" />
             Sair

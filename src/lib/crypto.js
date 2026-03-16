@@ -14,6 +14,7 @@
 const PBKDF2_ITERATIONS = 600000; // OWASP recommendation for SHA-256
 const SALT_LENGTH = 32; // 256 bits
 const IV_LENGTH = 12; // 96 bits (GCM standard)
+const ENCRYPTION_VERIFIER_PLAINTEXT = 'KAWA_NOTE_VERIFIER_V1';
 
 /**
  * Generate a random salt for key derivation
@@ -136,6 +137,33 @@ export async function decryptJSON(ciphertextBase64, key) {
   if (!ciphertextBase64) return null;
   const json = await decrypt(ciphertextBase64, key);
   return json ? JSON.parse(json) : null;
+}
+
+/**
+ * Creates a deterministic-purpose encrypted verifier used to confirm the password-derived key.
+ * The ciphertext is intentionally non-deterministic because AES-GCM uses a random IV.
+ * @param {CryptoKey} key
+ * @returns {Promise<string>}
+ */
+export async function createEncryptionVerifier(key) {
+  return encrypt(ENCRYPTION_VERIFIER_PLAINTEXT, key);
+}
+
+/**
+ * Validates that a derived key can decrypt the stored verifier.
+ * @param {string} verifierCiphertext
+ * @param {CryptoKey} key
+ * @returns {Promise<boolean>}
+ */
+export async function validateEncryptionVerifier(verifierCiphertext, key) {
+  if (!verifierCiphertext) return false;
+
+  try {
+    const plaintext = await decrypt(verifierCiphertext, key);
+    return plaintext === ENCRYPTION_VERIFIER_PLAINTEXT;
+  } catch {
+    return false;
+  }
 }
 
 // Utility functions

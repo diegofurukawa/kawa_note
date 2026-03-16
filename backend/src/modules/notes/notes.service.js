@@ -1,9 +1,29 @@
 import { prisma } from '../../config/database.js';
+import { queueMetadataEnrichment } from './notes.metadata.js';
+import { buildNoteScalarSelect, supportsNoteMetadataColumns } from './notes.compat.js';
+
+function getMetadataStatus(data, existingNote = null) {
+  const url = data.url !== undefined ? data.url : existingNote?.url;
+  if (!url) {
+    return 'idle';
+  }
+
+  if (data.previewData) {
+    return 'ready';
+  }
+
+  if (data.metadataStatus) {
+    return data.metadataStatus;
+  }
+
+  return 'queued';
+}
 
 export const notesService = {
   async listNotes(userId, tenantId, filters) {
     const { page, limit, folderId, tags, pinned } = filters;
     const skip = (page - 1) * limit;
+    const includeMetadata = await supportsNoteMetadataColumns();
 
     const where = {
       userId,
@@ -26,7 +46,8 @@ export const notesService = {
           { pinned: 'desc' },
           { updatedAt: 'desc' }
         ],
-        include: {
+        select: {
+          ...buildNoteScalarSelect(includeMetadata),
           folder: {
             select: {
               id: true,
@@ -61,13 +82,16 @@ export const notesService = {
   },
 
   async getNoteById(userId, tenantId, noteId) {
+    const includeMetadata = await supportsNoteMetadataColumns();
+
     const note = await prisma.note.findFirst({
       where: {
         id: noteId,
         userId,
         tenantId
       },
-      include: {
+      select: {
+        ...buildNoteScalarSelect(includeMetadata),
         folder: {
           select: {
             id: true,
@@ -104,13 +128,22 @@ export const notesService = {
   },
 
   async createNote(userId, tenantId, data) {
+    const includeMetadata = await supportsNoteMetadataColumns();
+    const metadataStatus = getMetadataStatus(data);
+    const { metadataStatus: _metadataStatus, ...persistedData } = data;
+
     const note = await prisma.note.create({
       data: {
-        ...data,
+        ...persistedData,
         userId,
-        tenantId
+        tenantId,
+        ...(includeMetadata && {
+          metadataStatus,
+          metadataFetchedAt: metadataStatus === 'ready' ? new Date() : null
+        })
       },
-      include: {
+      select: {
+        ...buildNoteScalarSelect(includeMetadata),
         folder: {
           select: {
             id: true,
@@ -121,26 +154,51 @@ export const notesService = {
       }
     });
 
+    if (includeMetadata && note.url && metadataStatus === 'queued') {
+      queueMetadataEnrichment({
+        noteId: note.id,
+        userId,
+        tenantId,
+        url: note.url
+      });
+    }
+
     return note;
   },
 
   async updateNote(userId, tenantId, noteId, data) {
+    const includeMetadata = await supportsNoteMetadataColumns();
+    const { metadataStatus: _metadataStatus, ...persistedData } = data;
     const existingNote = await prisma.note.findFirst({
       where: {
         id: noteId,
         userId,
         tenantId
-      }
+      },
+      select: buildNoteScalarSelect(includeMetadata)
     });
 
     if (!existingNote) {
       throw new Error('Note not found');
     }
 
+    const metadataStatus = getMetadataStatus(data, existingNote);
+    const shouldRefreshMetadata = Boolean(
+      (data.url !== undefined && data.url !== existingNote.url) ||
+      (data.previewData === null && (data.url !== undefined ? data.url : existingNote.url))
+    );
+
     const note = await prisma.note.update({
       where: { id: noteId },
-      data,
-      include: {
+      data: {
+        ...persistedData,
+        ...(includeMetadata && {
+          metadataStatus: shouldRefreshMetadata ? 'queued' : metadataStatus,
+          metadataFetchedAt: shouldRefreshMetadata ? null : existingNote.metadataFetchedAt
+        })
+      },
+      select: {
+        ...buildNoteScalarSelect(includeMetadata),
         folder: {
           select: {
             id: true,
@@ -150,6 +208,15 @@ export const notesService = {
         }
       }
     });
+
+    if (includeMetadata && note.url && (shouldRefreshMetadata || note.metadataStatus === 'queued')) {
+      queueMetadataEnrichment({
+        noteId: note.id,
+        userId,
+        tenantId,
+        url: note.url
+      });
+    }
 
     return note;
   },
@@ -160,7 +227,8 @@ export const notesService = {
         id: noteId,
         userId,
         tenantId
-      }
+      },
+      select: { id: true }
     });
 
     if (!existingNote) {
@@ -178,6 +246,8 @@ export const notesService = {
     // Text search on encrypted fields is not supported in E2E architecture
     // Search is performed client-side after decryption
     // This endpoint now only searches by tags
+    const includeMetadata = await supportsNoteMetadataColumns();
+
     const notes = await prisma.note.findMany({
       where: {
         userId,
@@ -186,7 +256,8 @@ export const notesService = {
       },
       orderBy: { updatedAt: 'desc' },
       take: 50,
-      include: {
+      select: {
+        ...buildNoteScalarSelect(includeMetadata),
         folder: {
           select: {
             id: true,

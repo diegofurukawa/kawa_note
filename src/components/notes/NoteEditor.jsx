@@ -4,7 +4,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, Pin, Loader2, ExternalLink, FolderInput, Edit3, Eye, Check, CheckSquare, ArrowUp, ArrowDown } from "lucide-react";
-import { format } from "date-fns";
 import { toast } from 'sonner';
 import { useUpdateNote } from '@/api/useNotes';
 import TagManager from './TagManager';
@@ -43,9 +42,8 @@ const typeColors = {
  */
 export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes = [], onMoveNote, mode = 'standalone', onSaveStatusChange }) {
   const [editedNote, setEditedNote] = useState(note);
-  const [isDirty, setIsDirty] = useState(false);
   const [_isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+  const [saveStatus, setSaveStatus] = useState('clean'); // 'clean' | 'pending_local' | 'sync_scheduled' | 'syncing' | 'sync_error'
   const [_error, setError] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const updateNoteMutation = useUpdateNote();
@@ -53,35 +51,20 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   const saveToastShownRef = useRef(false);
   const textareaRef = useRef(null);
   const prevNoteIdRef = useRef(note.id);
+  const currentNoteIdRef = useRef(note.id);
+  const latestEditedNoteRef = useRef(note);
+  const draftVersionRef = useRef(0);
+  const persistedVersionRef = useRef(0);
+  const inFlightVersionRef = useRef(null);
+  const lastChangedFieldRef = useRef('content');
 
-  useEffect(() => {
-    const isSameNote = note.id === prevNoteIdRef.current;
-    prevNoteIdRef.current = note.id;
+  latestEditedNoteRef.current = editedNote;
 
-    if (isSameNote && isDirty) {
-      // Same note refreshed from server while user is actively editing.
-      // Do not overwrite local edits or disrupt edit mode — the user's
-      // in-flight content takes precedence until the next auto-save cycle.
-      return;
-    }
+  const isDirty = draftVersionRef.current !== persistedVersionRef.current;
 
-    if (isSameNote) {
-      // Same note, no pending edits (e.g. server refresh after auto-save completed).
-      // Update the note data but preserve edit mode so the user stays in context.
-      setEditedNote(note);
-      setError(null);
-      saveToastShownRef.current = false;
-      return;
-    }
-
-    // Different note selected → full reset.
-    setEditedNote(note);
-    setIsDirty(false);
-    setSaveStatus('idle');
-    setError(null);
-    setIsEditMode(false);
-    saveToastShownRef.current = false;
-  }, [note]); // eslint-disable-line react-hooks/exhaustive-deps
+  const getDebounceMs = useCallback(() => {
+    return lastChangedFieldRef.current === 'content' ? 2400 : 1400;
+  }, []);
 
   // Extract all unique tags from all notes for autocomplete
   const allTags = useMemo(() => {
@@ -120,61 +103,41 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
     if (onSaveStatusChange) onSaveStatusChange(saveStatus);
   }, [saveStatus, onSaveStatusChange]);
 
-  // Auto-save effect com debounce
-  useEffect(() => {
-    if (!isDirty) return;
+  const handleAutoSave = useCallback(async (force = false) => {
+    if (!force && draftVersionRef.current === persistedVersionRef.current) return;
 
-    setSaveStatus('dirty');
-
-    // Limpar timer anterior
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Configurar novo timer (1500ms debounce)
-    debounceTimerRef.current = setTimeout(() => {
-      handleAutoSave();
-    }, 1500);
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [isDirty, editedNote]);
-
-  const handleAutoSave = useCallback(async () => {
-    if (!isDirty) return;
+    const snapshot = latestEditedNoteRef.current;
+    const version = draftVersionRef.current;
 
     // Do not attempt to save if content is empty — API requires at least 1 character.
     // The user may be mid-edit; silently skip and let them continue.
-    if (!editedNote.content?.trim()) {
-      setSaveStatus('idle');
+    if (!snapshot.content?.trim()) {
+      setSaveStatus('clean');
       return;
     }
 
     try {
-      setSaveStatus('saving');
+      setSaveStatus('syncing');
       setIsSaving(true);
       setError(null);
+      inFlightVersionRef.current = version;
 
       await updateNoteMutation.mutateAsync({
-        id: note.id,
+        id: currentNoteIdRef.current,
         data: {
-          title: editedNote.title?.trim() || 'Sem título',
-          content: editedNote.content,
-          pinned: editedNote.pinned,
-          tags: editedNote.tags
+          title: snapshot.title?.trim() || 'Sem título',
+          content: snapshot.content,
+          pinned: snapshot.pinned,
+          tags: snapshot.tags
         }
       });
 
-      setSaveStatus('saved');
-      setIsDirty(false);
+      if (inFlightVersionRef.current === version) {
+        persistedVersionRef.current = version;
+        inFlightVersionRef.current = null;
+      }
 
-      // Mostrar indicador "Salvo" por 3 segundos
-      setTimeout(() => {
-        setSaveStatus('idle');
-      }, 3000);
+      setSaveStatus(draftVersionRef.current === persistedVersionRef.current ? 'clean' : 'pending_local');
 
       if (onSave) onSave();
     } catch (err) {
@@ -185,7 +148,7 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
 
       const errorMessage = err?.data?.error?.message || err?.message || 'Erro ao salvar nota';
       setError(errorMessage);
-      setSaveStatus('error');
+      setSaveStatus('sync_error');
       
       // Mostrar toast de erro apenas uma vez
       if (!saveToastShownRef.current) {
@@ -195,14 +158,73 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
     } finally {
       setIsSaving(false);
     }
-  }, [editedNote, note.id, updateNoteMutation, isDirty, onSave]);
+  }, [updateNoteMutation, onSave]);
+
+  useEffect(() => {
+    const isSameNote = note.id === prevNoteIdRef.current;
+    prevNoteIdRef.current = note.id;
+
+    if (isSameNote && isDirty) {
+      // Same note refreshed from server while user is actively editing.
+      // Do not overwrite local edits or disrupt edit mode — the user's
+      // in-flight content takes precedence until the next auto-save cycle.
+      return;
+    }
+
+    if (isSameNote) {
+      // Same note, no pending edits (e.g. server refresh after auto-save completed).
+      // Update the note data but preserve edit mode so the user stays in context.
+      setEditedNote(note);
+      setError(null);
+      saveToastShownRef.current = false;
+      latestEditedNoteRef.current = note;
+      return;
+    }
+
+    if (isDirty) {
+      void handleAutoSave(true);
+    }
+
+    // Different note selected → full reset.
+    setEditedNote(note);
+    setSaveStatus('clean');
+    setError(null);
+    setIsEditMode(false);
+    saveToastShownRef.current = false;
+    currentNoteIdRef.current = note.id;
+    latestEditedNoteRef.current = note;
+    draftVersionRef.current = 0;
+    persistedVersionRef.current = 0;
+    inFlightVersionRef.current = null;
+  }, [note, handleAutoSave, isDirty]);
+
+  // Auto-save effect com debounce adaptativo
+  useEffect(() => {
+    if (!isDirty) return;
+
+    setSaveStatus('sync_scheduled');
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      void handleAutoSave();
+    }, getDebounceMs());
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [editedNote, isDirty, handleAutoSave, getDebounceMs]);
 
   // Força save imediato com Ctrl+S
   const handleForceSave = useCallback(async () => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
-    await handleAutoSave();
+    await handleAutoSave(true);
   }, [handleAutoSave]);
 
   useEffect(() => {
@@ -219,6 +241,14 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleForceSave, onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
 
   // F2 — Insert a new To-Do item
@@ -378,8 +408,10 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   }, [handleMoveLineUp, handleMoveLineDown, editedNote.content]);
 
   const handleChange = (field, value) => {
+    lastChangedFieldRef.current = field;
+    draftVersionRef.current += 1;
     setEditedNote(prev => ({ ...prev, [field]: value }));
-    setIsDirty(true);
+    setSaveStatus('pending_local');
     saveToastShownRef.current = false;
   };
 
@@ -421,33 +453,35 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
   // Render save status indicator
   const renderSaveIndicator = () => {
     switch (saveStatus) {
-      case 'dirty':
-        return <span className="text-xs text-amber-600 font-medium">• Não salvo</span>;
-      case 'saving':
+      case 'pending_local':
+        return <span className="text-xs text-amber-600 font-medium">• Rascunho local</span>;
+      case 'sync_scheduled':
+        return <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Sincronizando em instantes...</span>;
+      case 'syncing':
         return (
           <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
             <Loader2 className="w-3 h-3 animate-spin" />
             Salvando...
           </span>
         );
-      case 'saved':
+      case 'sync_error':
+        return <span className="text-xs text-red-600 font-medium">• Erro ao salvar</span>;
+      case 'clean':
         return (
-          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+          <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
             <Check className="w-3 h-3" />
-            Salvo
+            Em sincronia
           </span>
         );
-      case 'error':
-        return <span className="text-xs text-red-600 font-medium">• Erro ao salvar</span>;
       default:
         return null;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2">
           <Badge className={`${typeColors[editedNote.type]} border-0 text-xs`}>
             {editedNote.type}
@@ -523,7 +557,12 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
             variant={isEditMode ? "secondary" : "outline"}
             size="sm"
             className="h-7 px-2 text-xs"
-            onClick={() => setIsEditMode(!isEditMode)}
+            onClick={() => {
+              if (isEditMode) {
+                void handleForceSave();
+              }
+              setIsEditMode(!isEditMode);
+            }}
           >
             {isEditMode ? <Eye className="w-3.5 h-3.5 mr-1" /> : <Edit3 className="w-3.5 h-3.5 mr-1" />}
             {isEditMode ? 'Visualizar' : 'Editar'}
@@ -551,7 +590,8 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
           <Input
             value={editedNote.title}
             onChange={(e) => handleChange('title', e.target.value)}
-            className="text-xl font-bold border-0 px-0 focus-visible:ring-0"
+            onBlur={() => void handleForceSave()}
+            className="text-xl font-bold border-0 px-0 focus-visible:ring-0 bg-transparent dark:text-slate-50"
             placeholder="Título da nota..."
           />
 
@@ -596,7 +636,8 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
             value={editedNote.content}
             onChange={(e) => handleChange('content', e.target.value)}
             onKeyDown={handleTextareaKeyDown}
-            className="flex-1 mt-4 min-h-[200px] border-0 px-0 text-sm leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700"
+            onBlur={() => void handleForceSave()}
+            className="flex-1 mt-4 min-h-[200px] border-0 px-0 text-sm leading-relaxed resize-none focus-visible:ring-0 font-mono text-slate-700 dark:text-slate-200 bg-transparent"
             placeholder="Escreva em Markdown... (- [ ] para criar to-do)"
             autoFocus
           />
@@ -622,7 +663,7 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
                 }}
               />
             ) : (
-              <p className="text-slate-400 font-mono text-sm">
+              <p className="text-slate-400 dark:text-slate-500 font-mono text-sm">
                 {mode === 'panel' ? 'Clique em Editar para começar...' : 'Clique duplo para editar...'}
               </p>
             )}
@@ -630,9 +671,9 @@ export default function NoteEditor({ note, onSave, onClose = () => {}, allNotes 
         )}
 
         {/* URL Preview Card */}
-        {previewData && editedNote.url && (
+        {(previewData || ['queued', 'processing'].includes(editedNote.metadataStatus)) && editedNote.url && (
           <div className="mt-4">
-            <UrlPreviewCard previewData={previewData} url={editedNote.url} />
+            <UrlPreviewCard previewData={previewData} url={editedNote.url} status={editedNote.metadataStatus} />
           </div>
         )}
 
