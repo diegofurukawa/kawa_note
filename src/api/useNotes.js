@@ -376,8 +376,46 @@ export const useDeleteNote = () => {
   
   return useMutation({
     mutationFn: (id) => notesApi.delete(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: [NOTES_QUERY_KEY] });
+
+      const snapshots = queryClient.getQueriesData({ queryKey: [NOTES_QUERY_KEY] });
+      snapshots.forEach(([queryKey, queryData]) => {
+        if (!queryData) {
+          return;
+        }
+
+        if (Array.isArray(queryData.data)) {
+          queryClient.setQueryData(queryKey, {
+            ...queryData,
+            data: queryData.data.filter((note) => note.id !== id)
+          });
+          return;
+        }
+
+        if (queryData.data?.id === id) {
+          queryClient.setQueryData(queryKey, {
+            ...queryData,
+            data: null
+          });
+        }
+      });
+
+      return { snapshots };
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshots?.forEach(([queryKey, snapshot]) => {
+        queryClient.setQueryData(queryKey, snapshot);
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.refetchQueries({ queryKey: ['folders'], type: 'active' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.refetchQueries({ queryKey: ['folders'], type: 'active' });
     }
   });
 };

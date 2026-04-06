@@ -116,10 +116,10 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
         className={[
           'group relative flex items-start gap-3 px-3 py-3 cursor-pointer select-none',
-          'border-l-2 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400',
+          'border-l-2 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:focus-visible:ring-fuchsia-400',
           isActive
-            ? 'border-l-indigo-500 bg-indigo-50'
-            : 'border-l-transparent hover:bg-slate-50',
+            ? 'border-l-indigo-500 bg-indigo-50 dark:border-l-fuchsia-400 dark:bg-fuchsia-950/30'
+            : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70',
         ].join(' ')}
       >
         {/* Type color dot */}
@@ -135,14 +135,14 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
           {/* Title */}
           <p className={[
             'text-sm font-medium leading-snug truncate',
-            isActive ? 'text-indigo-900' : 'text-slate-800',
+            isActive ? 'text-indigo-900 dark:text-fuchsia-100' : 'text-slate-800 dark:text-slate-100',
           ].join(' ')}>
             {note.title || 'Sem título'}
           </p>
 
           {/* Content preview */}
           {contentPreview && (
-            <p className="text-xs text-slate-400 leading-snug mt-0.5 line-clamp-2">
+            <p className="text-xs text-slate-400 dark:text-slate-500 leading-snug mt-0.5 line-clamp-2">
               {contentPreview}
             </p>
           )}
@@ -156,7 +156,7 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
 
             {/* Checklist progress */}
             {checklistProgress.total > 0 && (
-              <span className="text-xs text-indigo-500 font-medium shrink-0">
+              <span className="text-xs text-indigo-500 dark:text-fuchsia-300 font-medium shrink-0">
                 ✓ {checklistProgress.completed}/{checklistProgress.total}
               </span>
             )}
@@ -165,17 +165,17 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
             {visibleTags.shown.map((tag, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center px-1.5 py-0 text-xs bg-slate-100 text-slate-500 rounded"
+                className="inline-flex items-center px-1.5 py-0 text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300 rounded"
               >
                 {tag}
               </span>
             ))}
             {visibleTags.overflow > 0 && (
-              <span className="text-xs text-slate-400">+{visibleTags.overflow}</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">+{visibleTags.overflow}</span>
             )}
 
             {/* Relative date (pushed to right) */}
-            <span className="text-xs text-slate-400 ml-auto shrink-0">{relativeDate}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto shrink-0">{relativeDate}</span>
           </div>
         </div>
 
@@ -184,7 +184,7 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
           <Button
             variant="ghost"
             size="icon"
-            className={`h-6 w-6 ${note.pinned ? 'text-amber-500' : 'text-slate-400'} hover:text-slate-700`}
+            className={`h-6 w-6 ${note.pinned ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} hover:text-slate-700 dark:hover:text-slate-100`}
             onClick={handleTogglePin}
             title={note.pinned ? 'Desafixar' : 'Fixar'}
             aria-label={note.pinned ? 'Desafixar nota' : 'Fixar nota'}
@@ -195,7 +195,7 @@ const NoteListItem = memo(function NoteListItem({ note, isActive, onClick, onDel
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-slate-400 hover:text-red-600"
+            className="h-6 w-6 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-rose-300"
             onClick={handleDelete}
             title="Deletar nota"
             aria-label="Deletar nota"

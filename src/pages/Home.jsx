@@ -172,6 +172,11 @@ export default function Home() {
     return folderScopedNotes;
   }, [folderScopedNotes, hasSearch, notes, searchScope]);
 
+  const unfolderedNotesCount = useMemo(
+    () => notes.filter((note) => !note.folderId).length,
+    [notes]
+  );
+
   const filteredNotes = useMemo(() => {
     const sourceNotes = hasSearch && searchScope === 'global' ? notes : folderScopedNotes;
 
@@ -208,6 +213,17 @@ export default function Home() {
       setActiveNote(fresh);
     }
   }, [notes, activeNote]);
+
+  useEffect(() => {
+    if (!selectedFolder || selectedFolder.virtual) {
+      return;
+    }
+
+    const folderStillExists = folders.some((folder) => folder.id === selectedFolder.id);
+    if (!folderStillExists) {
+      setSelectedFolder(null);
+    }
+  }, [folders, selectedFolder]);
 
   const getActiveEditorController = useCallback(() => {
     if (isCreatingNote) return createEditorRef.current;
@@ -266,12 +282,26 @@ export default function Home() {
       setActiveNote(null);
       if (isMobile) setMobileView('list');
     }
-    refetch();
+    void refetch();
   }, [activeNote, isMobile, refetch]);
 
   const handleTogglePin = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  const handleFolderDeleted = useCallback(async (result) => {
+    if (selectedFolder && !selectedFolder.virtual) {
+      const deletedFolderId = result?.id;
+      const deletedFolder = folders.find((folder) => folder.id === deletedFolderId);
+      const descendantIds = deletedFolderId ? collectDescendantIds(deletedFolderId, folders) : new Set();
+
+      if (deletedFolder || descendantIds.has(selectedFolder.id)) {
+        setSelectedFolder(null);
+      }
+    }
+
+    await refetch();
+  }, [folders, refetch, selectedFolder]);
 
   const handleNewNote = useCallback(() => {
     runActionWithGuard('criar uma nova nota', () => {
@@ -359,16 +389,18 @@ export default function Home() {
   const LIST_PANEL_WIDTH = 'w-[320px] min-w-[240px]';
 
   return (
-    <div className="flex h-screen bg-white dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100">
+    <div className="flex h-screen bg-white dark:bg-[#232733] overflow-hidden text-slate-900 dark:text-slate-100">
       <Sidebar
         selectedFolder={selectedFolder}
         onSelectFolder={handleFolderSelection}
         notesCount={notes.length}
+        unfolderedNotesCount={unfolderedNotesCount}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isMobile={isMobile}
         isSidebarOpen={isSidebarOpen}
         onCloseSidebar={closeSidebar}
+        onFolderDeleted={handleFolderDeleted}
         onSearch={setSearchTerm}
         searchTerm={searchTerm}
         onSelectSearchResult={handleSelectNote}
@@ -379,7 +411,7 @@ export default function Home() {
       />
 
       <div className={`flex-1 flex flex-col overflow-hidden ${isMobile ? (activeNote ? 'pb-28' : 'pb-16') : 'pb-0'}`}>
-        <div className="border-b border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/95 shrink-0">
+        <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-[#232733]/95 shrink-0">
           {migrationStatus === 'running' && (
             <div className="mx-3 md:mx-6 mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-lg flex items-center gap-3">
               <Lock className="w-5 h-5 text-blue-600 dark:text-blue-300 animate-pulse" />

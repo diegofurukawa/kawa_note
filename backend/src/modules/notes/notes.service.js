@@ -19,6 +19,26 @@ function getMetadataStatus(data, existingNote = null) {
   return 'queued';
 }
 
+async function ensureActiveFolder(userId, tenantId, folderId) {
+  if (!folderId) {
+    return;
+  }
+
+  const folder = await prisma.folder.findFirst({
+    where: {
+      id: folderId,
+      userId,
+      tenantId,
+      deletedAt: null
+    },
+    select: { id: true }
+  });
+
+  if (!folder) {
+    throw new Error('Folder not found');
+  }
+}
+
 export const notesService = {
   async listNotes(userId, tenantId, filters) {
     const { page, limit, folderId, tags, pinned } = filters;
@@ -28,6 +48,7 @@ export const notesService = {
     const where = {
       userId,
       tenantId,
+      deletedAt: null,
       ...(folderId && { folderId }),
       ...(pinned !== undefined && { pinned }),
       ...(tags && {
@@ -88,7 +109,8 @@ export const notesService = {
       where: {
         id: noteId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
       select: {
         ...buildNoteScalarSelect(includeMetadata),
@@ -132,6 +154,8 @@ export const notesService = {
     const metadataStatus = getMetadataStatus(data);
     const { metadataStatus: _metadataStatus, ...persistedData } = data;
 
+    await ensureActiveFolder(userId, tenantId, persistedData.folderId);
+
     const note = await prisma.note.create({
       data: {
         ...persistedData,
@@ -173,7 +197,8 @@ export const notesService = {
       where: {
         id: noteId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
       select: buildNoteScalarSelect(includeMetadata)
     });
@@ -181,6 +206,12 @@ export const notesService = {
     if (!existingNote) {
       throw new Error('Note not found');
     }
+
+    await ensureActiveFolder(
+      userId,
+      tenantId,
+      data.folderId !== undefined ? data.folderId : existingNote.folderId
+    );
 
     const metadataStatus = getMetadataStatus(data, existingNote);
     const shouldRefreshMetadata = Boolean(
@@ -226,20 +257,25 @@ export const notesService = {
       where: {
         id: noteId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
-      select: { id: true }
+      select: { id: true, folderId: true }
     });
 
     if (!existingNote) {
       throw new Error('Note not found');
     }
 
-    await prisma.note.delete({
-      where: { id: noteId }
+    await prisma.note.update({
+      where: { id: noteId },
+      data: {
+        deletedAt: new Date(),
+        deletedByUserId: userId
+      }
     });
 
-    return { id: noteId };
+    return { id: noteId, folderId: existingNote.folderId };
   },
 
   async searchNotes(userId, tenantId, query) {
@@ -252,6 +288,7 @@ export const notesService = {
       where: {
         userId,
         tenantId,
+        deletedAt: null,
         tags: { hasSome: [query] }
       },
       orderBy: { updatedAt: 'desc' },

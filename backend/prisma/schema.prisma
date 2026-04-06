@@ -144,6 +144,8 @@ model Folder {
   order          Int     @default(0)
   userId         String  @map("user_id")
   tenantId       String  @map("tenant_id") @db.VarChar(64)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedByUserId String? @map("deleted_by_user_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -154,6 +156,7 @@ model Folder {
   notes        Note[]
 
   @@index([tenantId])
+  @@index([tenantId, userId, deletedAt], name: "idx_folders_active_lookup")
   @@map("folders")
 }
 
@@ -173,6 +176,8 @@ model Note {
   folderId    String?  @map("folder_id")
   userId      String   @map("user_id")
   tenantId    String   @map("tenant_id") @db.VarChar(64)
+  deletedAt   DateTime? @map("deleted_at")
+  deletedByUserId String? @map("deleted_by_user_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -183,6 +188,8 @@ model Note {
   relationsTo   Relation[] @relation("NoteTo")
 
   @@index([tenantId])
+  @@index([tenantId, userId, deletedAt], name: "idx_notes_active_lookup")
+  @@index([folderId, deletedAt], name: "idx_notes_folder_active_lookup")
   @@map("notes")
 }
 

@@ -9,7 +9,17 @@ export const relationsService = {
     const [relations, total] = await Promise.all([
       prisma.relation.findMany({
         where: {
-          tenantId
+          tenantId,
+          noteFrom: {
+            userId,
+            tenantId,
+            deletedAt: null
+          },
+          noteTo: {
+            userId,
+            tenantId,
+            deletedAt: null
+          }
         },
         skip,
         take: limit,
@@ -33,7 +43,17 @@ export const relationsService = {
       }),
       prisma.relation.count({
         where: {
-          tenantId
+          tenantId,
+          noteFrom: {
+            userId,
+            tenantId,
+            deletedAt: null
+          },
+          noteTo: {
+            userId,
+            tenantId,
+            deletedAt: null
+          }
         }
       })
     ]);
@@ -57,7 +77,8 @@ export const relationsService = {
       where: {
         id: noteId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
       select: buildNoteScalarSelect(includeMetadata)
     });
@@ -69,6 +90,12 @@ export const relationsService = {
     const relations = await prisma.relation.findMany({
       where: {
         tenantId,
+        noteFrom: {
+          deletedAt: null
+        },
+        noteTo: {
+          deletedAt: null
+        },
         OR: [
           { noteFromId: noteId },
           { noteToId: noteId }
@@ -125,7 +152,8 @@ export const relationsService = {
         where: {
           id: data.noteFromId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         },
         select: buildNoteScalarSelect(includeMetadata)
       }),
@@ -133,7 +161,8 @@ export const relationsService = {
         where: {
           id: data.noteToId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         },
         select: buildNoteScalarSelect(includeMetadata)
       })
@@ -258,7 +287,17 @@ export const relationsService = {
   async getRelationGraph(userId, tenantId) {
     const relations = await prisma.relation.findMany({
       where: {
-        tenantId
+        tenantId,
+        noteFrom: {
+          userId,
+          tenantId,
+          deletedAt: null
+        },
+        noteTo: {
+          userId,
+          tenantId,
+          deletedAt: null
+        }
       },
       include: {
         noteFrom: {
@@ -289,7 +328,8 @@ export const relationsService = {
       where: {
         id: { in: Array.from(noteIds) },
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
       select: {
         id: true,

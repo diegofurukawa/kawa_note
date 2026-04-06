@@ -13,6 +13,8 @@
  * @property {boolean} [isEncrypted] - Whether note is encrypted
  * @property {boolean} [pinned] - Whether note is pinned
  * @property {string} [folderId] - Parent folder ID
+ * @property {Date | string | null} [deletedAt] - Soft delete timestamp
+ * @property {string | null} [deletedByUserId] - User responsible for soft delete
  * @property {Date} createdAt - Creation timestamp
  * @property {Date} updatedAt - Last update timestamp
  * @property {Folder} [folder] - Parent folder object (optional include)
@@ -27,6 +29,8 @@
  * @property {'slate' | 'blue' | 'purple' | 'green' | 'amber' | 'red' | 'pink'} [color] - Folder color
  * @property {string} [icon] - Folder icon
  * @property {number} [order] - Display order
+ * @property {Date | string | null} [deletedAt] - Soft delete timestamp
+ * @property {string | null} [deletedByUserId] - User responsible for soft delete
  * @property {Date} createdAt - Creation timestamp
  * @property {Date} updatedAt - Last update timestamp
  * @property {Object} [_count] - Count of related items (optional include)

@@ -32,12 +32,53 @@ function buildComputedCounts(folderMap, folderId) {
   return computedCounts;
 }
 
+function buildActiveNoteCountSelect() {
+  return {
+    where: {
+      deletedAt: null
+    }
+  };
+}
+
+function buildActiveSubfolderCountSelect() {
+  return {
+    where: {
+      deletedAt: null
+    }
+  };
+}
+
+async function collectDescendantFolderIds(folderId, userId, tenantId) {
+  const descendantIds = [];
+  const queue = [folderId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    descendantIds.push(currentId);
+
+    const children = await prisma.folder.findMany({
+      where: {
+        parentFolderId: currentId,
+        userId,
+        tenantId,
+        deletedAt: null
+      },
+      select: { id: true }
+    });
+
+    children.forEach((child) => queue.push(child.id));
+  }
+
+  return descendantIds;
+}
+
 export const foldersService = {
   async listFolders(userId, tenantId, parentId = null) {
     const folders = await prisma.folder.findMany({
       where: {
         userId,
         tenantId,
+        deletedAt: null,
         parentFolderId: parentId
       },
       orderBy: [
@@ -47,8 +88,8 @@ export const foldersService = {
       include: {
         _count: {
           select: {
-            notes: true,
-            subFolders: true
+            notes: buildActiveNoteCountSelect(),
+            subFolders: buildActiveSubfolderCountSelect()
           }
         }
       }
@@ -59,7 +100,7 @@ export const foldersService = {
 
   async getFolderHierarchy(userId, tenantId) {
     const folders = await prisma.folder.findMany({
-      where: { userId, tenantId },
+      where: { userId, tenantId, deletedAt: null },
       orderBy: [
         { order: 'asc' },
         { name: 'asc' }
@@ -67,8 +108,8 @@ export const foldersService = {
       include: {
         _count: {
           select: {
-            notes: true,
-            subFolders: true
+            notes: buildActiveNoteCountSelect(),
+            subFolders: buildActiveSubfolderCountSelect()
           }
         }
       }
@@ -103,10 +144,14 @@ export const foldersService = {
       where: {
         id: folderId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       },
       include: {
         subFolders: {
+          where: {
+            deletedAt: null
+          },
           orderBy: [
             { order: 'asc' },
             { name: 'asc' }
@@ -114,13 +159,16 @@ export const foldersService = {
           include: {
             _count: {
               select: {
-                notes: true,
-                subFolders: true
+                notes: buildActiveNoteCountSelect(),
+                subFolders: buildActiveSubfolderCountSelect()
               }
             }
           }
         },
         notes: {
+          where: {
+            deletedAt: null
+          },
           orderBy: [
             { pinned: 'desc' },
             { updatedAt: 'desc' }
@@ -129,8 +177,8 @@ export const foldersService = {
         },
         _count: {
           select: {
-            notes: true,
-            subFolders: true
+            notes: buildActiveNoteCountSelect(),
+            subFolders: buildActiveSubfolderCountSelect()
           }
         }
       }
@@ -163,7 +211,8 @@ export const foldersService = {
         where: {
           id: data.parentFolderId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         }
       });
 
@@ -181,8 +230,8 @@ export const foldersService = {
       include: {
         _count: {
           select: {
-            notes: true,
-            subFolders: true
+            notes: buildActiveNoteCountSelect(),
+            subFolders: buildActiveSubfolderCountSelect()
           }
         }
       }
@@ -196,7 +245,8 @@ export const foldersService = {
       where: {
         id: folderId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       }
     });
 
@@ -214,7 +264,8 @@ export const foldersService = {
         where: {
           id: data.parentFolderId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         }
       });
 
@@ -240,8 +291,8 @@ export const foldersService = {
       include: {
         _count: {
           select: {
-            notes: true,
-            subFolders: true
+            notes: buildActiveNoteCountSelect(),
+            subFolders: buildActiveSubfolderCountSelect()
           }
         }
       }
@@ -255,7 +306,8 @@ export const foldersService = {
       where: {
         id: folderId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       }
     });
 
@@ -263,11 +315,41 @@ export const foldersService = {
       throw new Error('Folder not found');
     }
 
-    await prisma.folder.delete({
-      where: { id: folderId }
-    });
+    const folderIds = await collectDescendantFolderIds(folderId, userId, tenantId);
+    const now = new Date();
 
-    return { id: folderId };
+    const [foldersResult, notesResult] = await prisma.$transaction([
+      prisma.folder.updateMany({
+        where: {
+          id: { in: folderIds },
+          userId,
+          tenantId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt: now,
+          deletedByUserId: userId
+        }
+      }),
+      prisma.note.updateMany({
+        where: {
+          folderId: { in: folderIds },
+          userId,
+          tenantId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt: now,
+          deletedByUserId: userId
+        }
+      })
+    ]);
+
+    return {
+      id: folderId,
+      affectedFolders: foldersResult.count,
+      affectedNotes: notesResult.count
+    };
   },
 
   async getFolderNotes(userId, tenantId, folderId, options = {}) {
@@ -279,7 +361,8 @@ export const foldersService = {
       where: {
         id: folderId,
         userId,
-        tenantId
+        tenantId,
+        deletedAt: null
       }
     });
 
@@ -292,7 +375,8 @@ export const foldersService = {
         where: {
           folderId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         },
         skip,
         take: limit,
@@ -306,7 +390,8 @@ export const foldersService = {
         where: {
           folderId,
           userId,
-          tenantId
+          tenantId,
+          deletedAt: null
         }
       })
     ]);

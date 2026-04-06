@@ -52,6 +52,8 @@ export function buildNoteScalarSelect(includeMetadata = false) {
     folderId: true,
     userId: true,
     tenantId: true,
+    deletedAt: true,
+    deletedByUserId: true,
     createdAt: true,
     updatedAt: true,
     ...(includeMetadata && {

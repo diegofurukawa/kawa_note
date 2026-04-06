@@ -31,7 +31,7 @@ const NoteDetailPanel = forwardRef(function NoteDetailPanel({ note, onUpdate, on
   }), []);
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 min-w-0">
+    <div className="flex flex-col h-full bg-white dark:bg-[#2a3040] min-w-0">
       <div className="flex-1 overflow-hidden">
         <NoteEditor
           ref={editorRef}

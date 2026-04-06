@@ -72,8 +72,8 @@ export const foldersController = {
     const { id } = folderIdParamSchema.parse(request.params);
     
     try {
-      await foldersService.deleteFolder(request.user.id, request.user.tenantId, id);
-      return reply.send(successResponse({ id }, 'Folder deleted successfully'));
+      const result = await foldersService.deleteFolder(request.user.id, request.user.tenantId, id);
+      return reply.send(successResponse(result, 'Folder deleted successfully'));
     } catch (error) {
       if (error.message === 'Folder not found') {
         return reply.status(404).send(errorResponse('Folder not found', 'NOT_FOUND', 404));

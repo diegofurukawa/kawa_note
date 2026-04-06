@@ -27,8 +27,16 @@ export const notesController = {
 
   async create(request, reply) {
     const data = createNoteSchema.parse(request.body);
-    const note = await notesService.createNote(request.user.id, request.user.tenantId, data);
-    return reply.status(201).send(successResponse(note, 'Note created successfully'));
+
+    try {
+      const note = await notesService.createNote(request.user.id, request.user.tenantId, data);
+      return reply.status(201).send(successResponse(note, 'Note created successfully'));
+    } catch (error) {
+      if (error.message === 'Folder not found') {
+        return reply.status(404).send(errorResponse('Folder not found', 'NOT_FOUND', 404));
+      }
+      throw error;
+    }
   },
 
   async update(request, reply) {
@@ -42,6 +50,9 @@ export const notesController = {
       if (error.message === 'Note not found') {
         return reply.status(404).send(errorResponse('Note not found', 'NOT_FOUND', 404));
       }
+      if (error.message === 'Folder not found') {
+        return reply.status(404).send(errorResponse('Folder not found', 'NOT_FOUND', 404));
+      }
       throw error;
     }
   },
@@ -50,8 +61,8 @@ export const notesController = {
     const { id } = noteIdParamSchema.parse(request.params);
     
     try {
-      await notesService.deleteNote(request.user.id, request.user.tenantId, id);
-      return reply.send(successResponse({ id }, 'Note deleted successfully'));
+      const result = await notesService.deleteNote(request.user.id, request.user.tenantId, id);
+      return reply.send(successResponse(result, 'Note deleted successfully'));
     } catch (error) {
       if (error.message === 'Note not found') {
         return reply.status(404).send(errorResponse('Note not found', 'NOT_FOUND', 404));

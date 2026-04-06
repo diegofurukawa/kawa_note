@@ -5,6 +5,7 @@ import { foldersApi } from './client';
 /** @typedef {import('@/types/api').ApiSuccessResponse} ApiSuccessResponse */
 
 const FOLDERS_QUERY_KEY = 'folders';
+const NOTES_QUERY_KEY = 'notes';
 
 /**
  * Hook to fetch folders list
@@ -71,6 +72,8 @@ export const useCreateFolder = () => {
     mutationFn: (folderData) => foldersApi.create(folderData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLDERS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.refetchQueries({ queryKey: [FOLDERS_QUERY_KEY], type: 'active' });
     }
   });
 };
@@ -87,6 +90,8 @@ export const useUpdateFolder = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [FOLDERS_QUERY_KEY, variables.id] });
       queryClient.invalidateQueries({ queryKey: [FOLDERS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.refetchQueries({ queryKey: [FOLDERS_QUERY_KEY], type: 'active' });
     }
   });
 };
@@ -102,6 +107,8 @@ export const useDeleteFolder = () => {
     mutationFn: (id) => foldersApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLDERS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTES_QUERY_KEY] });
+      queryClient.refetchQueries({ queryKey: [FOLDERS_QUERY_KEY], type: 'active' });
     }
   });
 };

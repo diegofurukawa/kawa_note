@@ -20,7 +20,7 @@ export default function ThemeToggle() {
       variant="ghost"
       size="sm"
       onClick={() => setTheme(getNextTheme(theme))}
-      className="w-full justify-start text-slate-600 dark:text-slate-300 dark:hover:text-white"
+      className="w-full justify-start text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-fuchsia-100 dark:hover:bg-fuchsia-950/30"
       title={label}
     >
       <Icon className="w-4 h-4 mr-2" />

@@ -18,9 +18,9 @@ export default function RelatedNotes({ currentNote }) {
   const suggestedRelations = relations.filter((relation) => relation.relationType === 'semantic_suggested');
 
   return (
-    <div className="space-y-4 p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50">
+    <div className="space-y-4 p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-[#262b3a]">
       {suggestedRelations.length > 0 && (
-        <Card className="p-4 bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900">
+        <Card className="p-4 bg-white dark:bg-[#31384a] border-amber-200 dark:border-amber-900/70">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-amber-500" />
             <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Sugestoes de relacao</h3>
@@ -29,7 +29,7 @@ export default function RelatedNotes({ currentNote }) {
 
           <div className="space-y-2">
             {suggestedRelations.map((relation) => (
-              <div key={relation.relationId} className="rounded-lg border border-amber-100 dark:border-amber-900/60 p-3 bg-amber-50/60 dark:bg-amber-950/20">
+              <div key={relation.relationId} className="rounded-lg border border-amber-100 dark:border-amber-900/60 p-3 bg-amber-50/60 dark:bg-amber-900/15">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{relation.note?.title || 'Sem titulo'}</p>
@@ -64,7 +64,7 @@ export default function RelatedNotes({ currentNote }) {
       )}
 
       {explicitRelations.length > 0 && (
-        <Card className="p-4 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+        <Card className="p-4 bg-white dark:bg-[#31384a] border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-2 mb-3">
             <Link2 className="w-4 h-4 text-indigo-500" />
             <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Relacionamentos ativos</h3>

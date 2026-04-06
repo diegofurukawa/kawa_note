@@ -32,7 +32,6 @@ import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { NO_FOLDER_SENTINEL } from "@/lib/constants";
 import { useFolderHierarchy, useCreateFolder, useUpdateFolder, useDeleteFolder } from '@/api/useFolders';
-import { useNotes } from '@/api/useNotes';
 import { checkAndHandleEncryptionError } from '@/lib/errorHandlers';
 import { useAuth } from '@/components/providers/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,20 +43,18 @@ import SearchBar from '@/components/notes/SearchBar';
 import ThemeToggle from './ThemeToggle';
 
 /** @typedef {import('@/types/models').Folder} Folder */
-/** @typedef {import('@/types/models').Note} Note */
-
 const colorClasses = {
-  slate: "text-slate-600 hover:bg-slate-100",
-  blue: "text-blue-600 hover:bg-blue-50",
-  purple: "text-purple-600 hover:bg-purple-50",
-  green: "text-green-600 hover:bg-green-50",
-  amber: "text-amber-600 hover:bg-amber-50",
-  red: "text-red-600 hover:bg-red-50",
-  pink: "text-pink-600 hover:bg-pink-50"
+  slate: "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80",
+  blue: "text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40",
+  purple: "text-fuchsia-600 hover:bg-fuchsia-50 dark:text-fuchsia-300 dark:hover:bg-fuchsia-950/35",
+  green: "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/35",
+  amber: "text-amber-600 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/35",
+  red: "text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/35",
+  pink: "text-pink-600 hover:bg-pink-50 dark:text-pink-300 dark:hover:bg-pink-950/35"
 };
 
 // @ts-ignore
-function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfolders = /** @type {any[]} */ ([]), isCollapsed = false, allFolders = [] }) {
+function FolderItem({ folder, selectedFolder, onSelect, onDeleteFolder, level = 0, subfolders = /** @type {any[]} */ ([]), isCollapsed = false, allFolders = [] }) {
   const [isOpen, setIsOpen] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(folder.name);
@@ -103,10 +100,26 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
     }
   };
 
-  const notesCount = folder.computedCounts?.recursiveNotes
-    ?? folder._count?.notes
-    ?? notes.filter((/** @type {Note} */ n) => n.folderId === folder.id).length;
+  const notesCount = folder.computedCounts?.recursiveNotes ?? folder._count?.notes ?? 0;
   const FolderIconComponent = getFolderIcon(folder.icon);
+
+  const handleDeleteFolder = async () => {
+    try {
+      const response = await deleteFolderMutation.mutateAsync(folder.id);
+      const affectedFolders = response?.data?.affectedFolders ?? 1;
+      const affectedNotes = response?.data?.affectedNotes ?? 0;
+      toast.success(
+        affectedNotes > 0
+          ? `${affectedFolders} pasta(s) e ${affectedNotes} nota(s) movidas para exclusao`
+          : `${affectedFolders} pasta(s) movidas para exclusao`
+      );
+      onDeleteFolder?.(response?.data ?? { id: folder.id });
+    } catch (error) {
+      if (checkAndHandleEncryptionError(error)) return;
+      const errorMessage = error?.data?.error?.message || error?.message || 'Erro ao deletar pasta';
+      toast.error(errorMessage);
+    }
+  };
 
   if (isCollapsed) {
     return (
@@ -117,7 +130,9 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
               onClick={() => onSelect(folder)}
               className={cn(
                 "flex items-center justify-center p-2 rounded-lg cursor-pointer transition-colors",
-                selectedFolder?.id === folder.id ? "bg-indigo-100 text-indigo-900" : colorClasses[/** @type {keyof typeof colorClasses} */ (folder.color) || 'slate']
+                selectedFolder?.id === folder.id
+                  ? "bg-indigo-100 text-indigo-900 dark:bg-fuchsia-950/45 dark:text-fuchsia-100"
+                  : colorClasses[/** @type {keyof typeof colorClasses} */ (folder.color) || 'slate']
               )}
             >
               <FolderIconComponent className="w-5 h-5 shrink-0" />
@@ -136,7 +151,9 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
       <div
         className={cn(
           "group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-sm",
-          selectedFolder?.id === folder.id ? "bg-indigo-100 text-indigo-900" : colorClasses[/** @type {keyof typeof colorClasses} */ (folder.color) || 'slate']
+          selectedFolder?.id === folder.id
+            ? "bg-indigo-100 text-indigo-900 dark:bg-fuchsia-950/45 dark:text-fuchsia-100"
+            : colorClasses[/** @type {keyof typeof colorClasses} */ (folder.color) || 'slate']
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
       >
@@ -182,7 +199,7 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
         )}
         
         {notesCount > 0 && (
-          <span className="text-xs text-slate-400 shrink-0">{notesCount}</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{notesCount}</span>
         )}
         
         {/* @ts-ignore */}
@@ -211,7 +228,7 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
               Renomear
             </DropdownMenuItem>
             {/* Separator */}
-            <div className="my-1 h-px bg-slate-200" />
+            <div className="my-1 h-px bg-slate-200 dark:bg-slate-800" />
             {/* Color Picker */}
             <div className="px-2 py-1.5">
               <ColorPickerPopover 
@@ -227,11 +244,11 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
               />
             </div>
             {/* Separator */}
-            <div className="my-1 h-px bg-slate-200" />
+            <div className="my-1 h-px bg-slate-200 dark:bg-slate-800" />
             {/* @ts-ignore */}
             <DropdownMenuItem
-              onClick={() => deleteFolderMutation.mutateAsync(folder.id)}
-              className="text-red-600"
+              onClick={handleDeleteFolder}
+              className="text-red-600 dark:text-rose-300"
             >
               <Trash2 className="w-3 h-3 mr-2" />
               Deletar
@@ -252,9 +269,9 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
         <FolderItem
           key={subfolder.id}
           folder={subfolder}
-          notes={notes}
           selectedFolder={selectedFolder}
           onSelect={onSelect}
+          onDeleteFolder={onDeleteFolder}
           level={level + 1}
           subfolders={allFolders.filter((/** @type {{ parentFolderId: string }} */ f) => f.parentFolderId === subfolder.id)}
           isCollapsed={isCollapsed}
@@ -274,15 +291,19 @@ function FolderItem({ folder, notes, selectedFolder, onSelect, level = 0, subfol
  * @param {boolean} props.isCollapsed - Se está recolhido
  * @param {Function} props.onToggleCollapse - Callback para alternar colapso
  * @param {boolean} props.isMobile - Se está em modo mobile
+ * @param {number} props.unfolderedNotesCount - Total de notas sem pasta
+ * @param {Function} props.onFolderDeleted - Callback após deletar pasta
  * @returns {JSX.Element} Conteúdo do sidebar
  */
 function SidebarContent({ 
   selectedFolder, 
   onSelectFolder, 
   notesCount, 
+  unfolderedNotesCount,
   isCollapsed = false, 
   onToggleCollapse,
   isMobile = false,
+  onFolderDeleted,
   onSearch,
   onSelectSearchResult,
   searchScope,
@@ -303,8 +324,6 @@ function SidebarContent({
     return result;
   };
   const folders = flattenFolders(foldersResponse?.data || []);
-  const { data: notesResponse = { data: [] } } = useNotes();
-  const notes = notesResponse?.data || [];
   const createFolderMutation = useCreateFolder();
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
@@ -351,7 +370,7 @@ function SidebarContent({
   return (
     <>
       {/* Header */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
         {isCollapsed ? (
           <div className="flex items-center justify-center">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
@@ -397,7 +416,9 @@ function SidebarContent({
                     onClick={() => onSelectFolder(null)}
                     className={cn(
                       "flex items-center justify-center p-2 rounded-lg cursor-pointer transition-colors",
-                      !selectedFolder ? "bg-indigo-100 text-indigo-900" : "text-slate-600 hover:bg-slate-100"
+                      !selectedFolder
+                        ? "bg-indigo-100 text-indigo-900 dark:bg-fuchsia-950/45 dark:text-fuchsia-100"
+                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80"
                     )}
                   >
                     <Brain className="w-5 h-5" />
@@ -413,12 +434,14 @@ function SidebarContent({
               onClick={() => onSelectFolder(null)}
               className={cn(
                 "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition-colors",
-                !selectedFolder ? "bg-indigo-100 text-indigo-900" : "text-slate-600 hover:bg-slate-100"
+                !selectedFolder
+                  ? "bg-indigo-100 text-indigo-900 dark:bg-fuchsia-950/45 dark:text-fuchsia-100"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80"
               )}
             >
               <Brain className="w-4 h-4" />
               <span className="flex-1">Todas as Notas</span>
-              <span className="text-xs text-slate-400">{notesCount || 0}</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">{notesCount || 0}</span>
             </div>
           )}
 
@@ -427,12 +450,14 @@ function SidebarContent({
               onClick={() => onSelectFolder(NO_FOLDER_SENTINEL)}
               className={cn(
                 "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition-colors",
-                selectedFolder?.virtual ? "bg-amber-100 text-amber-900" : "text-slate-600 hover:bg-slate-100"
+                selectedFolder?.virtual
+                  ? "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80"
               )}
             >
               <FileX className="w-4 h-4" />
               <span className="flex-1">Sem Pasta</span>
-              <span className="text-xs text-slate-400">{notes.filter(n => !n.folderId).length}</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">{unfolderedNotesCount || 0}</span>
             </div>
           )}
 
@@ -444,14 +469,16 @@ function SidebarContent({
                     onClick={() => onSelectFolder(NO_FOLDER_SENTINEL)}
                     className={cn(
                       "flex items-center justify-center p-2 rounded-lg cursor-pointer transition-colors",
-                      selectedFolder?.virtual ? "bg-amber-100 text-amber-900" : "text-slate-600 hover:bg-slate-100"
+                      selectedFolder?.virtual
+                        ? "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80"
                     )}
                   >
                     <FileX className="w-5 h-5" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="right">
-                  <p>Sem Pasta ({notes.filter(n => !n.folderId).length})</p>
+                  <p>Sem Pasta ({unfolderedNotesCount || 0})</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -477,7 +504,7 @@ function SidebarContent({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex items-center justify-center p-2">
-                    <div className="h-px w-8 bg-slate-300" />
+                    <div className="h-px w-8 bg-slate-300 dark:bg-slate-700" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="right">
@@ -532,9 +559,9 @@ function SidebarContent({
             <FolderItem
               key={folder.id}
               folder={folder}
-              notes={notes}
               selectedFolder={selectedFolder}
               onSelect={onSelectFolder}
+              onDeleteFolder={onFolderDeleted}
               subfolders={folders.filter((/** @type {{ parentFolderId: string }} */ f) => f.parentFolderId === folder.id)}
               isCollapsed={isCollapsed}
               allFolders={folders}
@@ -544,14 +571,14 @@ function SidebarContent({
       </ScrollArea>
 
       {/* User Area */}
-      <div className="p-3 border-t border-slate-200">
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800">
         {isCollapsed ? (
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                    <button className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium", getAvatarColor())}>
                         {getUserInitials()}
                       </div>
@@ -560,8 +587,8 @@ function SidebarContent({
                   <DropdownMenuContent align="end" side="right">
                     {user && (
                       <div className="px-2 py-1.5 text-sm">
-                        <p className="font-medium text-slate-900">{user.name || 'Usuário'}</p>
-                        <p className="text-xs text-slate-500">{user.email}</p>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">{user.name || 'Usuário'}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
                       </div>
                     )}
                     <DropdownMenuItem onClick={handleLogout}>
@@ -603,7 +630,7 @@ function SidebarContent({
 
       {/* Toggle Button - Desktop only */}
       {!isMobile && (
-        <div className="p-3 border-t border-slate-200">
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800">
           {isCollapsed ? (
             <TooltipProvider delayDuration={0}>
               <Tooltip>
@@ -627,7 +654,7 @@ function SidebarContent({
               variant="ghost"
               size="sm"
               onClick={onToggleCollapse}
-              className="w-full justify-start text-slate-600"
+              className="w-full justify-start text-slate-600 dark:text-slate-300 dark:hover:text-slate-100"
             >
               <PanelLeftClose className="w-4 h-4 mr-2" />
               Recolher
@@ -645,11 +672,13 @@ function SidebarContent({
  * @param {Object} props.selectedFolder - Pasta selecionada atualmente
  * @param {Function} props.onSelectFolder - Callback ao selecionar pasta
  * @param {number} props.notesCount - Quantidade total de notas
+ * @param {number} props.unfolderedNotesCount - Quantidade de notas sem pasta
  * @param {boolean} props.isCollapsed - Se a sidebar está recolhida (desktop only)
  * @param {Function} props.onToggleCollapse - Callback para alternar colapso (desktop only)
  * @param {boolean} props.isMobile - Se está em modo mobile
  * @param {boolean} props.isSidebarOpen - Se o drawer está aberto (mobile only)
  * @param {Function} props.onCloseSidebar - Callback para fechar drawer (mobile only)
+ * @param {Function} props.onFolderDeleted - Callback após deletar pasta
  * @returns {JSX.Element} Sidebar com suporte a desktop e mobile
  */
 // @ts-ignore
@@ -657,11 +686,13 @@ export default function Sidebar({
   selectedFolder, 
   onSelectFolder, 
   notesCount, 
+  unfolderedNotesCount = 0,
   isCollapsed = false, 
   onToggleCollapse,
   isMobile = false,
   isSidebarOpen = false,
   onCloseSidebar = () => {},
+  onFolderDeleted,
   // Search props
   onSearch,
   onSelectSearchResult,
@@ -683,9 +714,11 @@ export default function Sidebar({
               onCloseSidebar();
             }}
             notesCount={notesCount}
+            unfolderedNotesCount={unfolderedNotesCount}
             isCollapsed={false}
             onToggleCollapse={() => {}}
             isMobile={true}
+            onFolderDeleted={onFolderDeleted}
             onSearch={onSearch}
             onSelectSearchResult={onSelectSearchResult}
             searchScope={searchScope}
@@ -702,16 +735,18 @@ export default function Sidebar({
   // Desktop: renderizar como sidebar permanente
   return (
     <div className={cn(
-      "h-screen bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300",
+      "h-screen bg-slate-50 dark:bg-[#202433] border-r border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300",
       isCollapsed ? "w-16" : "w-64"
     )}>
       <SidebarContent
         selectedFolder={selectedFolder}
         onSelectFolder={onSelectFolder}
         notesCount={notesCount}
+        unfolderedNotesCount={unfolderedNotesCount}
         isCollapsed={isCollapsed}
         onToggleCollapse={onToggleCollapse}
         isMobile={false}
+        onFolderDeleted={onFolderDeleted}
         onSearch={onSearch}
         onSelectSearchResult={onSelectSearchResult}
         searchScope={searchScope}

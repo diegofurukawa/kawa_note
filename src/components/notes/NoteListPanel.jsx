@@ -51,14 +51,14 @@ export default function NoteListPanel({
   const isEmpty = notes.length === 0;
 
   return (
-    <div className="flex flex-col h-full border-r border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 overflow-hidden">
+    <div className="flex flex-col h-full border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-[#262b3a] overflow-hidden">
 
       {/* New Note button — creation happens in the right panel */}
       <div className="px-3 pt-2 pb-2 shrink-0">
         <Button
           id="btn-new-note"
           variant="outline"
-          className="w-full justify-start gap-2 text-slate-500 dark:text-slate-300 border-dashed hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all"
+          className="w-full justify-start gap-2 text-slate-500 dark:text-slate-300 border-dashed hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-fuchsia-700 dark:hover:text-fuchsia-200 hover:bg-indigo-50 dark:hover:bg-fuchsia-950/25 transition-all"
           onClick={onNewNote}
           aria-label="Criar nova nota"
         >
